@@ -1,7 +1,7 @@
-joblib==1.4.2
-lightgbm==4.5.0
-matplotlib==3.8.3
-numpy==2.2.2
-pandas==2.2.3
-private_pgm==1.0.0
-scikit_learn==1.4.0
+joblib>=1.4.2
+lightgbm>=4.5.0
+matplotlib>=3.8.3
+numpy>=1.26.4
+pandas>=2.2.0
+private_pgm>=1.0.0
+scikit_learn>=1.4.0
