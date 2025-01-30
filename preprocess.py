@@ -6,6 +6,7 @@ import json
 import re
 import joblib
 
+from secrets import randbits
 from sklearn.model_selection import train_test_split
 
 file_readers = {
@@ -62,13 +63,19 @@ def label_data(data, spec):
     id_column = spec["identifier_column"]
     label_column = spec["label_column"]
     mapping = spec["label_mapping"]
-    default_label = spec["default_mapping"]
 
     labels = {}
     for source_id in data.index:
         id = jhu_id_transform(source_id)
         label = label_file[label_file[id_column] == id][label_column].values[0]
-        label = mapping[label]
+        if label in mapping:
+            label = mapping[label]
+        elif "default_label" in spec:
+            print("Did not find mapping for ", label, 
+                  ", using default label ", spec["default_mapping"])
+            label = spec["default_mapping"]
+        else:
+            print("Warning: Unable to determine correct label for ", label)
         labels[source_id] = label
     labels = pandas.Series(data=labels, name="label")
     return pandas.concat([labels, data], axis=1)
@@ -107,7 +114,35 @@ def discretize_data(data, spec):
             write_file(quantile_dict, spec["discretize"]["save_quantiles"])
             print("Quantile data written to ", spec["discretize"]["save_quantiles"])
     return data
-        
+
+def preprocess(spec):
+    data = load_data(spec)
+    data = data.apply(pandas.to_numeric, errors='coerce')
+    data = discretize_data(data, spec)
+    data = label_data(data, spec)
+
+    print("Shape of combined, labelled data (rows, columns): ", data.shape)
+
+    results = {}
+    if "domain" in spec["output"]:
+        domain = {}
+        for col in data.columns:
+            domain[str(col)] = data[col].nunique()
+        results["domain"] = domain
+        write_file(domain, spec["output"]["domain"])
+        print("Domain written to ", spec["output"]["domain"])
+    
+    if "processed_data" in spec["output"]:
+        results["combined_data"] = data
+        write_file(data, spec["output"]["processed_data"], index=False)
+        print("Data written to ", spec["output"]["processed_data"])
+
+    train, test = split_data(data, spec)
+    train.reset_index(drop=True, inplace=True)
+    test.reset_index(drop=True, inplace=True)
+    results["train"] = train
+    results["test"] = test
+    return results
 
 def split_data(data, spec):
     if "split" in spec:
@@ -116,8 +151,8 @@ def split_data(data, spec):
                   "as seed for train/test split")
             seed = spec["split"]["seed"]
         else:
-            print("Using random seed for train/test split")
-            seed = random()
+            seed = randbits(32)
+            print("Using random seed", seed, "for train/test split")
         train, test = train_test_split(
                 data, 
                 test_size=spec["split"]["test_ratio"], shuffle=True, 
@@ -132,32 +167,18 @@ def split_data(data, spec):
             write_file(test, spec["split"]["test_data"], index=False)
             print("Testing data written to ", spec["split"]["test_data"])
 
+        return (train, test)
+    else:
+        return (data, None)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "Data Preprocesser")
     parser.add_argument('-s', '--spec', required=True)
 
     args = parser.parse_args()
     spec = json.load(open(args.spec))
+    preprocess(spec)
 
-    data = load_data(spec)
-    data = data.apply(pandas.to_numeric, errors='coerce')
-    data = discretize_data(data, spec)
-    data = label_data(data, spec)
-
-    print("Shape of combined, labelled data (rows, columns): ", data.shape)
-
-    if "domain" in spec["output"]:
-        domain = {}
-        for col in data.columns:
-            domain[str(col)] = data[col].nunique()
-        write_file(domain, spec["output"]["domain"])
-        print("Domain written to ", spec["output"]["domain"])
-    
-    if "processed_data" in spec["output"]:
-        write_file(data, spec["output"]["processed_data"], index=False)
-        print("Data written to ", spec["output"]["processed_data"])
-
-    split_data(data, spec)
 
 
 
