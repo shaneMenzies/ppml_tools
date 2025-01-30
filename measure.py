@@ -40,7 +40,8 @@ def single_run_binary(train_x, train_y, test_x, test_y, lgb_params):
     predictions = classifier.predict(test_x)
     prob_preds = classifier.predict_proba(test_x)
 
-    scores = pandas.DataFrame(index=binary_score_types, columns=average_types, dtype=float)
+    scores = pandas.DataFrame(index=binary_score_types, 
+                              columns=average_types, dtype=float)
     for avg in average_types:
         scores.loc["f1", avg] = metrics.f1_score(test_y, predictions, average=avg)
         scores.loc["recall", avg] = metrics.recall_score(test_y, predictions, average=avg)
@@ -96,14 +97,20 @@ def single_run_multi(train_x, train_y, test_x, test_y, lgb_params):
     return (scores, confusion_matrix)
 
 def run_multi(train_x, train_y, test_x, test_y, lgb_params, iterations):
-    scores = pandas.DataFrame(index=multi_score_types, columns=average_types, dtype=numpy.array(dtype=float))
+    scores = pandas.DataFrame(index=multi_score_types, 
+                              columns=average_types,
+                              dtype=object)
     confusion_matrices = []
+
+    for col in scores.columns:
+        for row in scores.index:
+            scores.loc[row, col] = numpy.empty(iterations, dtype=float)
 
     for i in range(iterations):
         i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, lgb_params)
-        for avg in scores.columns:
+        for col in scores.columns:
             for row in scores.index:
-                scores[avg][row].append(i_scores[avg][row])
+                scores.loc[row, col][i] = i_scores[col][row]
         confusion_matrices.append(i_cm)
 
     return (scores, confusion_matrices)

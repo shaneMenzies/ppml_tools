@@ -94,8 +94,8 @@ def mech_aim(args):
     aim = importlib.import_module("aim")
     data = make_dataset(args["dataset"], args["domain"])
     workload = determine_workload(args, data)
-    model, synth = aim.AIM(args["epsilon"], args["delta"]).run(data, workload)
     workload = [(cl, 1.0) for cl in workload]
+    model, synth = aim.AIM(args["epsilon"], args["delta"]).run(data, workload)
     return (synth.df, calculate_error(data, synth, workload))
 
 def mech_mst(args):

@@ -1,0 +1,44 @@
+{ 
+    "data": [ 
+        "../data/JHU/JH_batch1_salmon.merged.gene_counts.tsv", 
+        "../data/JHU/JHU_batch2_salmon.merged.gene_counts.tsv", 
+        "../data/JHU/JHU_batch2_addl_salmon.merged.gene_counts.tsv", 
+        "../data/JHU/JHU_batch3_salmon.merged.gene_counts.tsv", 
+        "../data/JHU/JHU_mixed_batch_salmon.merged.gene_counts.tsv" 
+    ], 
+
+    "identifier_column": "specimenID", 
+    "label_file": "../data/labels.xlsx", 
+    "label_column": "tumorType", 
+    "label_mapping": { 
+        "Cutaneous Neurofibroma": 0, 
+        "Diffuse Infiltrating Neurofibroma": 0, 
+        "Malignant Peripheral Nerve Sheath Tumor": 2, 
+        "Nodular Neurofibroma": 0, 
+        "Plexiform Neurofibroma": 1 
+    }, 
+ 
+    "discretize": { 
+        "quantiles": [ 
+            0.25, 
+            0.5, 
+            0.75 
+        ], 
+        "save_statistics": "jhu_hm_g2m_multi_stats.joblib", 
+        "save_means": "jhu_hm_g2m_multi_means.joblib", 
+        "save_quantiles": "jhu_hm_g2m_multi_quantiles.joblib" 
+    }, 
+ 
+    "filter": "../data/hm_g2m.csv", 
+ 
+    "split": { 
+        "train_data": "jhu_hm_g2m_multi_train.csv", 
+        "test_data": "jhu_hm_g2m_multi_test.csv", 
+        "test_ratio": 0.2
+    }, 
+ 
+    "output": { 
+        "processed_data": "jhu_hm_g2m_multi.csv", 
+        "domain": "jhu_hm_g2m_multi_domain.json" 
+    } 
+} 
