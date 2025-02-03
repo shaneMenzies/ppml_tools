@@ -50,7 +50,7 @@ def pipeline(args):
 
     os.makedirs(args.output_dir, exist_ok=True)
     start_time = time.process_time()
-    synth, error = run_mechanism(args.mechanism_dir, args.mechanism, mechanism_args)
+    synth = run_mechanism(args.mechanism_dir, args.mechanism, mechanism_args)
     elapsed_time = time.process_time() - start_time
     print("Synthetic dataset generated in", elapsed_time, "s")
     write_file(synth, os.path.join(args.output_dir, "synthetic_data.csv"), index=False)

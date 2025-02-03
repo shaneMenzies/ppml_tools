@@ -75,15 +75,6 @@ def determine_workload(args, data):
         ]
     return workload
 
-def calculate_error(realDS, synthDS, workload):
-    errors = []
-    for proj in workload:
-        x = realDS.project(proj).datavector()
-        y = synthDS.project(proj).datavector()
-        e = 0.5 * numpy.linalg.norm(y / y.sum() - y / y.sum(), 1)
-        errors.append(e)
-    return numpy.mean(numpy.asarray(errors))
-
 def make_dataset(data, domain):
     from mbi import Dataset, Domain
     # Should already be loaded from a file
@@ -96,7 +87,7 @@ def mech_aim(args):
     workload = determine_workload(args, data)
     workload = [(cl, 1.0) for cl in workload]
     model, synth = aim.AIM(args["epsilon"], args["delta"]).run(data, workload)
-    return (synth.df, calculate_error(data, synth, workload))
+    return synth.df 
 
 def mech_mst(args):
     from mbi import Dataset, Domain
@@ -104,7 +95,7 @@ def mech_mst(args):
     data = make_dataset(args["dataset"], args["domain"])
     workload = determine_workload(args, data)
     synth = mst.MST(data, args["epsilon"], args["delta"]) 
-    return (synth.df, calculate_error(data, synth, workload))
+    return synth.df
 
 def mech_mwem(args):
     from mbi import Dataset, Domain
@@ -113,7 +104,7 @@ def mech_mwem(args):
     workload = determine_workload(args, data)
     synth = mwem.mwem_pgm(data, args["epsilon"], args["delta"],
                               workload=workload)
-    return (synth.df, calculate_error(data, synth, workload))
+    return synth.df
 
 def mech_pgg(args):
     pgg = importlib.import_module("model")
@@ -127,13 +118,20 @@ def mech_pgg(args):
     realDS = make_dataset(args["dataset"], args["domain"])
     synthDS = make_dataset(synth, args["domain"])
     error = calculate_error(realDS, synthDS, determine_workload(args, realDS))
-    return (synth, error)
+    return synth
+
+def mech_real(args):
+    realData = args["dataset"]
+    realDS = make_dataset(realData, args["domain"])
+    error = calculate_error(realDS, realDS, determine_workload(args, realDS))
+    return realData
 
 mechanisms = {
         "aim": mech_aim,
         "mst": mech_mst, 
         "mwem": mech_mwem, 
-        "pro_gene_gen": mech_pgg
+        "pro_gene_gen": mech_pgg,
+        "real": mech_real,
         }
 
 def run_mechanism(directory, mechanism, args):
@@ -166,8 +164,7 @@ if __name__ == "__main__":
     if args.rng_seed != None:
         mech_args["rng_seed"] = args.rng_seed
 
-    synth_ds, error = run_mechanism(args.mechanism_dir, args.mechanism, mech_args)
-    print("Error:", error)
+    synth_ds = run_mechanism(args.mechanism_dir, args.mechanism, mech_args)
     if args.save != None:
         write_file(synth_ds, args.save, index=False)
 

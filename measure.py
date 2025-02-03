@@ -2,8 +2,9 @@ import argparse
 import numpy
 import pandas
 import lightgbm
+import math
 from secrets import randbits
-from sklearn import metrics
+from sklearn import metrics, model_selection
 
 file_readers = {
         "csv": lambda file: pandas.read_csv(file),
@@ -45,28 +46,67 @@ def single_run_binary(train_x, train_y, test_x, test_y, lgb_params):
     for avg in average_types:
         scores.loc["f1", avg] = metrics.f1_score(test_y, predictions, average=avg)
         scores.loc["recall", avg] = metrics.recall_score(test_y, predictions, average=avg)
-        scores.loc["auc", avg] = metrics.roc_auc_score(test_y, predictions, average=avg)
+        try:
+            scores.loc["auc", avg] = metrics.roc_auc_score(test_y, predictions, average=avg)
+        except:
+            scores.loc["auc", avg] = -1.0
     
     confusion_matrix = metrics.confusion_matrix(test_y, predictions)
     return (scores, confusion_matrix)
 
-def run_binary(train_x, train_y, test_x, test_y, lgb_params, iterations):
+def run_binary(train, test, lgb_params, args, iterations):
     scores = pandas.DataFrame(index=binary_score_types, 
                               columns=average_types, 
                               dtype=object
                               )
     confusion_matrices = []
+    label = args.label_column
 
     for col in scores.columns:
         for row in scores.index:
             scores.loc[row, col] = numpy.empty(iterations, dtype=float)
 
     for i in range(iterations):
+        shuffle_train = train.sample(frac=1)
+        shuffle_test = test.sample(frac=1)
+
+        train_x = shuffle_train.drop(columns=[label])
+        train_y = shuffle_train[label]
+        test_x = shuffle_test.drop(columns=[label])
+        test_y = shuffle_test[label]
+
         i_scores, i_cm = single_run_binary(train_x, train_y, test_x, test_y, lgb_params)
         for col in scores.columns:
             for row in scores.index:
                 scores.loc[row, col][i] = i_scores[col][row]
         confusion_matrices.append(i_cm)
+
+    return (scores, confusion_matrices)
+
+def run_binary_cv(train_x, train_y, lgb_params, iterations, cv_folds=5):
+    scores = pandas.DataFrame(index=binary_score_types, 
+                              columns=average_types, 
+                              dtype=object
+                              )
+
+    confusion_matrices = []
+    for col in scores.columns:
+        for row in scores.index:
+            scores.loc[row, col] = numpy.empty(iterations * cv_folds, dtype=float)
+
+    for i in range(iterations):
+        i_base = i * cv_folds
+        folds = model_selection.StratifiedKFold(cv_folds, shuffle=True).split(train_x, train_y)
+        for i_fold, (train_fold, test_fold) in enumerate(folds):
+            i_scores, i_cm = single_run_binary(train_x.iloc[train_fold],
+                                               train_y.iloc[train_fold], 
+                                               train_x.iloc[test_fold], 
+                                               train_y.iloc[test_fold], 
+                                               lgb_params)
+            for col in scores.columns:
+                for row in scores.index:
+                    scores.loc[row, col][i_base + i_fold] = i_scores[col][row]
+            confusion_matrices.append(i_cm)
 
     return (scores, confusion_matrices)
 
@@ -96,22 +136,58 @@ def single_run_multi(train_x, train_y, test_x, test_y, lgb_params):
     confusion_matrix = metrics.confusion_matrix(test_y, predictions)
     return (scores, confusion_matrix)
 
-def run_multi(train_x, train_y, test_x, test_y, lgb_params, iterations):
+def run_multi(train, test, lgb_params, args, iterations):
     scores = pandas.DataFrame(index=multi_score_types, 
                               columns=average_types,
                               dtype=object)
     confusion_matrices = []
+    label = args.label_column
 
     for col in scores.columns:
         for row in scores.index:
             scores.loc[row, col] = numpy.empty(iterations, dtype=float)
 
     for i in range(iterations):
+        shuffle_train = train.sample(frac=1)
+        shuffle_test = test.sample(frac=1)
+
+        train_x = shuffle_train.drop(columns=[label])
+        train_y = shuffle_train[label]
+        test_x = shuffle_test.drop(columns=[label])
+        test_y = shuffle_test[label]
+
         i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, lgb_params)
         for col in scores.columns:
             for row in scores.index:
                 scores.loc[row, col][i] = i_scores[col][row]
         confusion_matrices.append(i_cm)
+
+    return (scores, confusion_matrices)
+
+def run_multi_cv(train_x, train_y, lgb_params, iterations, cv_folds=5):
+    scores = pandas.DataFrame(index=multi_score_types, 
+                              columns=average_types, 
+                              dtype=object
+                              )
+
+    confusion_matrices = []
+    for col in scores.columns:
+        for row in scores.index:
+            scores.loc[row, col] = numpy.empty(iterations * cv_folds, dtype=float)
+
+    for i in range(iterations):
+        i_base = i * cv_folds
+        folds = model_selection.StratifiedKFold(cv_folds, shuffle=True).split(train_x, train_y)
+        for i_fold, (train_fold, test_fold) in enumerate(folds):
+            i_scores, i_cm = single_run_multi(train_x.iloc[train_fold],
+                                               train_y.iloc[train_fold], 
+                                               train_x.iloc[test_fold], 
+                                               train_y.iloc[test_fold], 
+                                               lgb_params)
+            for col in scores.columns:
+                for row in scores.index:
+                    scores.loc[row, col][i_base + i_fold] = i_scores[col][row]
+            confusion_matrices.append(i_cm)
 
     return (scores, confusion_matrices)
 
@@ -165,6 +241,13 @@ def save_cm_img(matrix, title, file):
     matplotlib.pyplot.title(title)
     matplotlib.pyplot.savefig(file)
 
+def save_hist_img(values, title, file):
+    import matplotlib
+    matplotlib.pyplot.clf()
+    display = matplotlib.pyplot.hist(values)
+    matplotlib.pyplot.title(title)
+    matplotlib.pyplot.savefig(file)
+
 
 measure_args = [
         "train_data",
@@ -176,8 +259,6 @@ measure_args = [
         ]
 
 def measure(train, test, args):
-    model_data = train
-    test_data = test
     binary = args.binary
     label = args.label_column
     verbose = args.verbose
@@ -189,18 +270,6 @@ def measure(train, test, args):
         assert args.multi_class != None,  "Must set either binary (-b) or multi-class (-m [# classes])!"
         num_classes = args.multi_class
         print("Using Multi-Class Labels, with", num_classes, "classes.\n")
-
-    # Split label column off
-    train_x = model_data.drop(columns=[label])
-    train_y = model_data[label]
-    test_x = test_data.drop(columns=[label])
-    test_y = test_data[label]
-
-    if verbose:
-        print("Train X: ", train_x)
-        print("Train Y: ", train_y)
-        print("Test X: ", test_x)
-        print("Test Y: ", test_y)
 
     # Setup classifier
     lgb_params = {
@@ -217,9 +286,9 @@ def measure(train, test, args):
     print("LGBM parameters: ", lgb_params)
 
     if binary:
-        scores, confusion_matrices = run_binary(train_x, train_y, test_x, test_y, lgb_params, iterations)
+        scores, confusion_matrices = run_binary(train, test, lgb_params, args, iterations)
     else:
-        scores, confusion_matrices = run_multi(train_x, train_y, test_x, test_y, lgb_params, iterations)
+        scores, confusion_matrices = run_multi(train, test, lgb_params, args, iterations)
 
     avg_scores, avg_matrix = average_results(scores, confusion_matrices)
     std_scores, std_matrix = std_results(scores, confusion_matrices)
