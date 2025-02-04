@@ -7,7 +7,7 @@
         "../data/JHU/JHU_mixed_batch_salmon.merged.gene_counts.tsv"
     ],
     "identifier_column": "specimenID",
-    "label_file": "../data/labels.xlsx",
+    "label_file": "../data/labels.csv",
     "label_column": "tumorType",
     "label_mapping": {
         "Cutaneous Neurofibroma": 0,

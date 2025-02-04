@@ -8,7 +8,7 @@
     ], 
 
     "identifier_column": "specimenID", 
-    "label_file": "../data/labels.xlsx", 
+    "label_file": "../data/labels.csv", 
     "label_column": "tumorType", 
     "label_mapping": { 
         "Cutaneous Neurofibroma": 0, 
