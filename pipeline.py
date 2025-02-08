@@ -10,34 +10,16 @@ import os
 from preprocess import preprocess
 from generate import run_mechanism
 from measure import measure
-
-file_readers = {
-        "csv": lambda file: pandas.read_csv(file),
-        "tsv": lambda file: pandas.read_csv(file, sep='\t'),
-        "xlsx": lambda file: pandas.read_excel(file)
-        }
-
-file_writers = {
-        "csv": lambda data, file, **kwargs: data.to_csv(file, **kwargs),
-        "tsv": lambda data, file, **kwargs: data.to_csv(file, **kwargs, sep='\t'),
-        "xlsx": lambda data, file, **kwargs: data.to_excel(file, **kwargs),
-        "joblib": lambda data, file, **kwargs: joblib.dump(data, file, **kwargs),
-        "json": lambda data, file, **kwargs: json.dump(data, open(file, 'w'), **kwargs, indent=4)
-        }
-
-def read_file(path):
-    _, _, suffix = path.rpartition('.')
-    return file_readers[suffix](path)
-
-def write_file(data, path, **kwargs):
-    _, _, suffix = path.rpartition('.')
-    file_writers[suffix](data, path, **kwargs)
+from ppml_utils import *
 
 def pipeline(args):
     # Preprocess
     pp_spec = json.load(open(args.preprocess_spec))
     pp_result = preprocess(pp_spec)
     train, test, domain = pp_result["train"], pp_result["test"], pp_result["domain"]
+    if args.store_splits:
+        write_file(pp_result["train"], os.path.join(args.output_dir, "train_data.csv.SENSITIVE"))
+        write_file(pp_result["test"], os.path.join(args.output_dir, "test_data.csv.SENSITIVE"))
 
     # Generate
     mechanism_args = {
@@ -50,24 +32,20 @@ def pipeline(args):
 
     os.makedirs(args.output_dir, exist_ok=True)
     start_time = time.process_time()
-    synth = run_mechanism(args.mechanism_dir, args.mechanism, mechanism_args)
+    synth, error = run_mechanism(args.mechanism_dir, args.mechanism, mechanism_args)
     elapsed_time = time.process_time() - start_time
     print("Synthetic dataset generated in", elapsed_time, "s")
     write_file(synth, os.path.join(args.output_dir, "synthetic_data.csv"), index=False)
+    write_file(numpy.array(error, ndmin=1), 
+               os.path.join(args.output_dir, "workload_error.txt"),
+               fmt="%1.8f")
 
     # Measure
     measure_args = types.SimpleNamespace(
             label_column = "label",
             verbose = False,
             iterations = args.measure_iterations,
-            save_all_scores = os.path.join(args.output_dir, "all_scores.csv"),
-            save_all_cms = os.path.join(args.output_dir, "all_cms.npy"),
-            save_avg_scores = os.path.join(args.output_dir, "avg_scores.csv"),
-            save_avg_cm = os.path.join(args.output_dir, "avg_cm.txt"),
-            save_std_scores = os.path.join(args.output_dir, "std_scores.csv"),
-            save_std_cm = os.path.join(args.output_dir, "std_cm.txt"),
-            avg_cm_img = os.path.join(args.output_dir, "avg_cm.png"),
-            std_cm_img = os.path.join(args.output_dir, "std_cm.png"),
+            output_dir = args.output_dir
             )
 
     if domain["label"] == 2:
@@ -88,6 +66,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed")
     parser.add_argument("-i", "--measure-iterations", default=2500, type=int)
     parser.add_argument("-o", "--output-dir", required=True)
+    parser.add_argument("--store-splits", action="store_true")
 
     args = parser.parse_args()
 

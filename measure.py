@@ -3,30 +3,13 @@ import numpy
 import pandas
 import lightgbm
 import math
+import matplotlib
+import os
+
+from matplotlib import pyplot
 from secrets import randbits
 from sklearn import metrics, model_selection
-
-file_readers = {
-        "csv": lambda file: pandas.read_csv(file),
-        "tsv": lambda file: pandas.read_csv(file, sep='\t'),
-        "xlsx": lambda file: pandas.read_excel(file)
-        }
-
-file_writers = {
-        "csv": lambda data, file, **kwargs: data.to_csv(file, **kwargs),
-        "tsv": lambda data, file, **kwargs: data.to_csv(file, **kwargs, sep='\t'),
-        "xlsx": lambda data, file, **kwargs: data.to_excel(file, **kwargs),
-        "joblib": lambda data, file, **kwargs: joblib.dump(data, file, **kwargs),
-        "json": lambda data, file, **kwargs: json.dump(data, open(file, 'w'), **kwargs, indent=4)
-        }
-
-def read_file(path):
-    _, _, suffix = path.rpartition('.')
-    return file_readers[suffix](path)
-
-def write_file(data, path, **kwargs):
-    _, _, suffix = path.rpartition('.')
-    file_writers[suffix](data, path, **kwargs)
+from ppml_utils import *
 
 average_types = ["micro", "macro", "weighted"]
 
@@ -234,19 +217,25 @@ def print_results(scores, matrix):
     print(scores)
     print(matrix)
 
-def save_cm_img(matrix, title, file):
-    import matplotlib
-    cm_display = metrics.ConfusionMatrixDisplay(matrix)
+def save_cm_img(matrix, title, file, **kwargs):
+    cm_display = metrics.ConfusionMatrixDisplay(matrix, **kwargs)
     cm_display.plot()
-    matplotlib.pyplot.title(title)
-    matplotlib.pyplot.savefig(file)
+    pyplot.title(title)
+    pyplot.savefig(file)
 
-def save_hist_img(values, title, file):
-    import matplotlib
-    matplotlib.pyplot.clf()
-    display = matplotlib.pyplot.hist(values)
-    matplotlib.pyplot.title(title)
-    matplotlib.pyplot.savefig(file)
+def save_hist_img(values, title, file, **kwargs):
+    pyplot.clf()
+    pyplot.hist(values, bins="auto", density=True, **kwargs)
+    pyplot.title(title)
+    pyplot.savefig(file)
+
+def save_multi_hist_img(values, title, file, **kwargs):
+    pyplot.clf()
+    pyplot.hist(values, **kwargs, bins="auto", density=True,
+                            fill=False, histtype="step", stacked=True)
+    pyplot.title(title)
+    pyplot.savefig(file)
+
 
 
 measure_args = [
@@ -293,24 +282,26 @@ def measure(train, test, args):
     avg_scores, avg_matrix = average_results(scores, confusion_matrices)
     std_scores, std_matrix = std_results(scores, confusion_matrices)
 
-    if args.save_all_scores != None:
-        write_file(scores, args.save_all_scores)
-    if args.save_avg_scores != None:
-        write_file(avg_scores, args.save_avg_scores)
-    if args.save_std_scores != None:
-        write_file(std_scores, args.save_std_scores)
+    out = args.output_dir
 
-    if args.save_all_cms != None:
-        numpy.save(args.save_all_cms, numpy.asarray(confusion_matrices))
-    if args.save_avg_cm != None:
-        numpy.savetxt(args.save_avg_cm, avg_matrix)
-    if args.save_std_cm != None:
-        numpy.savetxt(args.save_std_cm, std_matrix)
+    scores_json = {}
+    for score_type in scores.index:
+        this_score = {}
+        for avg in scores.columns:
+            this_score[avg] = scores.loc[score_type, avg].tolist()
+        scores_json[score_type] = this_score
+            
 
-    if args.avg_cm_img != None:
-        save_cm_img(avg_matrix, "Averaged Confusion Matrix", args.avg_cm_img)
-    if args.std_cm_img != None:
-        save_cm_img(std_matrix, "Std. Dev. for Confusion Matrix", args.std_cm_img)
+    write_file(scores_json, os.path.join(out, "all_scores.json"))
+    write_file(avg_scores, os.path.join(out, "avg_scores.csv"))
+    write_file(std_scores, os.path.join(out, "std_scores.csv"))
+
+    numpy.save(os.path.join(out, "all_cms.npy"), numpy.asarray(confusion_matrices))
+    numpy.savetxt(os.path.join(out, "avg_cm.txt"), avg_matrix)
+    numpy.savetxt(os.path.join(out, "std_cm.txt"), std_matrix)
+
+    save_cm_img(avg_matrix, "Averaged Confusion Matrix", os.path.join(out, "avg_cm.png"))
+    save_cm_img(std_matrix, "Std. Dev. for Confusion Matrix", os.path.join(out, "std_cm.png"))
 
     print("Averages over", iterations, "runs:")
     print_results(avg_scores, avg_matrix)
@@ -328,14 +319,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--multi-class", type=int)
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-i", "--iterations", type=int, default=100)
-    parser.add_argument("--save-all-scores")
-    parser.add_argument("--save-all-cms")
-    parser.add_argument("--save-avg-scores")
-    parser.add_argument("--save-avg-cm")
-    parser.add_argument("--save-std-scores")
-    parser.add_argument("--save-std-cm")
-    parser.add_argument("--avg-cm-img")
-    parser.add_argument("--std-cm-img")
+    parser.add_argument("-o", "--output-dir")
     args = parser.parse_args()
 
     measure(read_file(args.train_data), read_file(args.test_data), args)

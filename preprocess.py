@@ -8,29 +8,7 @@ import joblib
 
 from secrets import randbits
 from sklearn.model_selection import train_test_split
-
-file_readers = {
-        "csv": lambda file: pandas.read_csv(file),
-        "tsv": lambda file: pandas.read_csv(file, sep='\t'),
-        "xlsx": lambda file: pandas.read_excel(file)
-        }
-
-file_writers = {
-        "csv": lambda data, file, **kwargs: data.to_csv(file, **kwargs),
-        "tsv": lambda data, file, **kwargs: data.to_csv(file, **kwargs, sep='\t'),
-        "xlsx": lambda data, file, **kwargs: data.to_excel(file, **kwargs),
-        "joblib": lambda data, file, **kwargs: joblib.dump(data, file, **kwargs),
-        "json": lambda data, file, **kwargs: json.dump(data, open(file, 'w'), **kwargs, indent=4)
-        }
-
-def read_file(path):
-    _, _, suffix = path.rpartition('.')
-    return file_readers[suffix](path)
-
-def write_file(data, path, **kwargs):
-    _, _, suffix = path.rpartition('.')
-    file_writers[suffix](data, path, **kwargs)
-
+from ppml_utils import *
 
 def jhu_id_transform(id):
     return '-'.join(id.split('.')[:4])
