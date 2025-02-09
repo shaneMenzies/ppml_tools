@@ -17,9 +17,8 @@ def pipeline(args):
     pp_spec = json.load(open(args.preprocess_spec))
     pp_result = preprocess(pp_spec)
     train, test, domain = pp_result["train"], pp_result["test"], pp_result["domain"]
-    if args.store_splits:
-        write_file(pp_result["train"], os.path.join(args.output_dir, "train_data.csv.SENSITIVE"))
-        write_file(pp_result["test"], os.path.join(args.output_dir, "test_data.csv.SENSITIVE"))
+    write_file(pp_result["train"], os.path.join(args.output_dir, "train_data.csv.SENSITIVE"))
+    write_file(pp_result["test"], os.path.join(args.output_dir, "test_data.csv.SENSITIVE"))
 
     # Generate
     mechanism_args = {

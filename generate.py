@@ -69,8 +69,10 @@ def workload_error(real, synth, workload):
             Y = synth.project(proj).datavector()
             X_sum = X.sum()
             Y_sum = Y.sum()
-            X = X / X_sum
-            Y = Y / Y_sum
+            if X_sum != 0:
+                X = X / X_sum
+            if Y_sum != 0:
+                Y = Y / Y_sum
             e = 0.5 * numpy.linalg.norm(X - Y, 1)
             errors.append(e)
         error = numpy.mean(numpy.asarray(errors))
@@ -88,7 +90,8 @@ def mech_aim(args):
     aim = importlib.import_module("aim")
     data = make_dataset(args["dataset"], args["domain"])
     workload = determine_workload(args, data)
-    model, synth = aim.AIM(args["epsilon"], args["delta"]).run(data, workload)
+    aim_workload = [(cl, 1.0) for cl in workload]
+    model, synth = aim.AIM(args["epsilon"], args["delta"]).run(data, aim_workload)
     error = workload_error(data, synth, workload)
     return synth.df, error 
 
