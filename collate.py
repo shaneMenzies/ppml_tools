@@ -10,7 +10,7 @@ from sklearn import metrics
 from ppml_utils import *
 
 file_paths = {
-        "all_scores": "all_scores.csv",
+        "all_scores": "all_scores.json",
         "avg_scores": "avg_scores.csv",
         "all_cms": "all_cms.npy",
         }
@@ -27,7 +27,7 @@ def collate(directories, title=None):
     for dir in directories:
         print(dir)
         try:
-            file = read_file(os.path.join(dir, file_paths["avg_scores"]), header=0, index_col=0)
+            file = read_file(os.path.join(dir, file_paths["all_scores"]))
             scores.append(file)
         except:
             print("\tScores file not found in", dir)
@@ -38,16 +38,29 @@ def collate(directories, title=None):
         except:
             print("\tConfusion matrices file not found in", dir)
 
-    averages = pandas.DataFrame(index=scores[0].index, columns=scores[0].columns, dtype=float)
-    for avg in averages.columns:
-        for row in averages.index:
+    for i in range(len(scores)):
+        for score in scores[i].keys():
+            for avg, values in dict(scores[i][score]).items():
+                if values[0] < 0:
+                    scores[i][score].pop(avg)
+
+    averages = {}
+    for score in scores[0]:
+        averages[score] = {}
+        for avg in scores[0][score]:
             sum = 0.0
-            for score in scores:
-                sum += score.loc[row, avg]
-            averages.loc[row, avg] = sum / len(scores)
+            for i in scores:
+                sum += numpy.mean(numpy.asarray(i[score][avg]))
+            averages[score][avg] = sum / len(scores)
 
     print(averages)
-    write_file(averages, "avg_of_avg_scores.csv")
+    write_file(averages, "avg_scores_collated.json")
+
+    for score in scores[0]:
+        for avg in scores[0][score]:
+            measure.save_multi_hist_img(numpy.concatenate([i[score][avg] for i in scores]), 
+                                        f"{score} - {avg}\n{title}", 
+                                        f"{score}_{avg}_collated.png")
 
     average_cms = measure.average_confusion_matrix(matrices)
     std_cms = measure.std_confusion_matrix(matrices)
