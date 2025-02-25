@@ -17,12 +17,14 @@ def pipeline(args):
     os.makedirs(args.output_dir, exist_ok=True)
     synth = read_file(args.data)
     domain = read_file(args.domain)
+    test = read_file(os.path.join(args.output_dir, "test_data.SENSITIVE.csv"))
 
     # Measure
     measure_args = types.SimpleNamespace(
             label_column = "label",
             verbose = False,
             iterations = args.measure_iterations,
+            output_dir = args.output_dir,
             save_all_scores = os.path.join(args.output_dir, "all_scores.csv"),
             save_all_cms = os.path.join(args.output_dir, "all_cms.npy"),
             save_avg_scores = os.path.join(args.output_dir, "avg_scores.csv"),
@@ -45,7 +47,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "Pipeline (Only Measurement)")
     parser.add_argument("--data", required=True)
     parser.add_argument("--domain", required=True)
-    parser.add_argument("-i", "--measure-iterations", default=2500, type=int)
+    parser.add_argument("-i", "--measure-iterations", default=1, type=int)
     parser.add_argument("-o", "--output-dir", required=True)
 
     args = parser.parse_args()

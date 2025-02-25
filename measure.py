@@ -47,9 +47,24 @@ def run_binary(train, test, lgb_params, args, iterations):
 
     for col in scores.columns:
         for row in scores.index:
-            scores.loc[row, col] = numpy.empty(iterations, dtype=float)
+            scores.loc[row, col] = numpy.atleast_1d(numpy.empty(iterations, dtype=float))
 
-    for i in range(iterations):
+    if iterations > 1:
+        for i in range(iterations):
+            shuffle_train = train.sample(frac=1)
+            shuffle_test = test.sample(frac=1)
+
+            train_x = shuffle_train.drop(columns=[label])
+            train_y = shuffle_train[label]
+            test_x = shuffle_test.drop(columns=[label])
+            test_y = shuffle_test[label]
+
+            i_scores, i_cm = single_run_binary(train_x, train_y, test_x, test_y, lgb_params)
+            for col in scores.columns:
+                for row in scores.index:
+                    scores.loc[row, col][i] = i_scores[col][row]
+            confusion_matrices.append(i_cm)
+    else:
         shuffle_train = train.sample(frac=1)
         shuffle_test = test.sample(frac=1)
 
@@ -58,10 +73,7 @@ def run_binary(train, test, lgb_params, args, iterations):
         test_x = shuffle_test.drop(columns=[label])
         test_y = shuffle_test[label]
 
-        i_scores, i_cm = single_run_binary(train_x, train_y, test_x, test_y, lgb_params)
-        for col in scores.columns:
-            for row in scores.index:
-                scores.loc[row, col][i] = i_scores[col][row]
+        scores, i_cm = single_run_binary(train_x, train_y, test_x, test_y, lgb_params)
         confusion_matrices.append(i_cm)
 
     return (scores, confusion_matrices)
@@ -125,12 +137,28 @@ def run_multi(train, test, lgb_params, args, iterations):
                               dtype=object)
     confusion_matrices = []
     label = args.label_column
+    print(iterations, "measure iterations")
 
     for col in scores.columns:
         for row in scores.index:
             scores.loc[row, col] = numpy.empty(iterations, dtype=float)
 
-    for i in range(iterations):
+    if iterations > 1:
+        for i in range(iterations):
+            shuffle_train = train.sample(frac=1)
+            shuffle_test = test.sample(frac=1)
+
+            train_x = shuffle_train.drop(columns=[label])
+            train_y = shuffle_train[label]
+            test_x = shuffle_test.drop(columns=[label])
+            test_y = shuffle_test[label]
+
+            i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, lgb_params)
+            for col in scores.columns:
+                for row in scores.index:
+                    scores.loc[row, col][i] = i_scores[col][row]
+            confusion_matrices.append(i_cm)
+    else:
         shuffle_train = train.sample(frac=1)
         shuffle_test = test.sample(frac=1)
 
@@ -142,7 +170,7 @@ def run_multi(train, test, lgb_params, args, iterations):
         i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, lgb_params)
         for col in scores.columns:
             for row in scores.index:
-                scores.loc[row, col][i] = i_scores[col][row]
+                scores.loc[row, col] = numpy.array(i_scores[col][row], ndmin=1)
         confusion_matrices.append(i_cm)
 
     return (scores, confusion_matrices)
@@ -231,9 +259,10 @@ def save_hist_img(values, title, file, **kwargs):
 
 def save_multi_hist_img(values, title, file, **kwargs):
     pyplot.clf()
-    pyplot.hist(values, **kwargs, bins="auto", density=True,
-                            fill=False, histtype="step", stacked=True)
+    pyplot.hist(values, **kwargs, bins="auto", range=(0.0, 1.0), density=True,
+                            fill=False, histtype="step")
     pyplot.title(title)
+    pyplot.legend()
     pyplot.savefig(file)
 
 
@@ -279,8 +308,9 @@ def measure(train, test, args):
     else:
         scores, confusion_matrices = run_multi(train, test, lgb_params, args, iterations)
 
-    avg_scores, avg_matrix = average_results(scores, confusion_matrices)
-    std_scores, std_matrix = std_results(scores, confusion_matrices)
+    if iterations > 1:
+        avg_scores, avg_matrix = average_results(scores, confusion_matrices)
+        std_scores, std_matrix = std_results(scores, confusion_matrices)
 
     out = args.output_dir
 
@@ -293,20 +323,31 @@ def measure(train, test, args):
             
 
     write_file(scores_json, os.path.join(out, "all_scores.json"))
-    write_file(avg_scores, os.path.join(out, "avg_scores.csv"))
-    write_file(std_scores, os.path.join(out, "std_scores.csv"))
+    if iterations > 1:
+        write_file(avg_scores, os.path.join(out, "avg_scores.csv"))
+        write_file(std_scores, os.path.join(out, "std_scores.csv"))
 
     numpy.save(os.path.join(out, "all_cms.npy"), numpy.asarray(confusion_matrices))
-    numpy.savetxt(os.path.join(out, "avg_cm.txt"), avg_matrix)
-    numpy.savetxt(os.path.join(out, "std_cm.txt"), std_matrix)
+    if iterations > 1:
+        numpy.savetxt(os.path.join(out, "avg_cm.txt"), avg_matrix)
+        numpy.savetxt(os.path.join(out, "std_cm.txt"), std_matrix)
+    else:
+        numpy.savetxt(os.path.join(out, "cm.txt"), confusion_matrices[0])
 
-    save_cm_img(avg_matrix, "Averaged Confusion Matrix", os.path.join(out, "avg_cm.png"))
-    save_cm_img(std_matrix, "Std. Dev. for Confusion Matrix", os.path.join(out, "std_cm.png"))
+    if iterations > 1:
+        save_cm_img(avg_matrix, "Averaged Confusion Matrix", os.path.join(out, "avg_cm.png"))
+        save_cm_img(std_matrix, "Std. Dev. for Confusion Matrix", os.path.join(out, "std_cm.png"))
+    else:
+        save_cm_img(confusion_matrices[0], "Confusion Matrix", os.path.join(out, "cm.png"))
 
-    print("Averages over", iterations, "runs:")
-    print_results(avg_scores, avg_matrix)
-    print("Std. Dev:")
-    print_results(std_scores, std_matrix)
+    if iterations > 1:
+        print("Averages over", iterations, "runs:")
+        print_results(avg_scores, avg_matrix)
+        print("Std. Dev:")
+        print_results(std_scores, std_matrix)
+    else:
+        print("Results:")
+        print_results(scores, confusion_matrices)
     return (scores, confusion_matrices)
 
 

@@ -1,0 +1,57 @@
+{
+    "data": {
+        "train": {
+            "x": [
+                "../data/ELSA/TCGA-COMBINED/real/X_train_real_split_1.csv"
+            ],
+            "y": [
+                "../data/ELSA/TCGA-COMBINED/real/y_train_real_split_1.csv"
+            ]
+        },
+
+        "test": {
+            "x": [
+                "../data/ELSA/TCGA-COMBINED/real/X_test_real_split_1.csv"
+            ],
+            "y": [
+                "../data/ELSA/TCGA-COMBINED/real/y_test_real_split_1.csv"
+            ]
+        }
+    },
+
+    "label_column": "cancer_type",
+    "label_mapping": {
+        "TCGA-BRCA" : 0,
+        "TCGA-COAD" : 1, 
+        "TCGA-ESCA" : 2, 
+        "TCGA-KIRC" : 3, 
+        "TCGA-KIRP" : 4,
+        "TCGA-LIHC" : 5,
+        "TCGA-LUSC" : 6,
+        "TCGA-LUAD" : 7, 
+        "TCGA-OV" : 8,
+        "TCGA-PAAD" : 9,
+        "TCGA-PRAD" : 10, 
+        "TCGA-SKCM" : 11 
+    },
+
+    "discretize": { 
+        "quantiles": [ 
+            0.25, 
+            0.5, 
+            0.75 
+        ], 
+        "save_statistics": "elsa_combined_4bins_fold1_stats.joblib", 
+        "save_means": "elsa_combined_4bins_fold1_means.joblib", 
+        "save_quantiles": "elsa_combined_4bins_fold1_quantiles.joblib" 
+    }, 
+
+    "split": {
+        "train_data": "elsa_combined_4bins_fold1_train.csv",
+        "test_data": "elsa_combined_4bins_fold1_test.csv"
+    },
+
+    "output": {
+        "domain": "elsa_combined_4bins_fold1_domain.json"
+    }
+}

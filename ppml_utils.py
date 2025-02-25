@@ -6,6 +6,7 @@ import json
 file_readers = {
         "csv": lambda file, **kwargs: pandas.read_csv(file, **kwargs),
         "tsv": lambda file, **kwargs: pandas.read_csv(file, sep='\t', **kwargs),
+        "joblib": lambda file, **kwargs: joblib.load(file, **kwargs),
         "json": lambda file, **kwargs: json.load(open(file, **kwargs)),
         "npy": lambda file, **kwargs: numpy.load(file, **kwargs),
         "txt": lambda file, **kwargs: numpy.loadtxt(file, **kwargs)

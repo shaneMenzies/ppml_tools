@@ -27,6 +27,7 @@
     },
 
     "output": {
-        "processed_data": "jhu_hdr_nobins_multi.csv"
+        "processed_data": "jhu_hdr_nobins_multi.csv",
+        "domain": "jhu_hdr_nobins_multi_domain.json"
     }
 }

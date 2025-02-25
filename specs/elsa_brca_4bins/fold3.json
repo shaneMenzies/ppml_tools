@@ -1,0 +1,50 @@
+{
+    "data": {
+        "train": {
+            "x": [
+                "../data/ELSA/TCGA-BRCA/real/X_train_real_split_3.csv"
+            ],
+            "y": [
+                "../data/ELSA/TCGA-BRCA/real/y_train_real_split_3.csv"
+            ]
+        },
+
+        "test": {
+            "x": [
+                "../data/ELSA/TCGA-BRCA/real/X_test_real_split_3.csv"
+            ],
+            "y": [
+                "../data/ELSA/TCGA-BRCA/real/y_test_real_split_3.csv"
+            ]
+        }
+    },
+
+    "label_column": "Subtype",
+    "label_mapping": {
+        "BRCA.LumA" : 0,
+        "BRCA.LumB": 1,
+        "BRCA.Her2": 2,
+        "BRCA.Normal": 3,
+        "BRCA.Basal": 4
+    },
+
+    "discretize": { 
+        "quantiles": [
+            0.25, 
+            0.5, 
+            0.75 
+        ],
+        "save_statistics": "elsa_brca_4bins_fold1_stats.joblib", 
+        "save_means": "elsa_brca_4bins_fold1_means.joblib", 
+        "save_quantiles": "elsa_brca_4bins_fold1_quantiles.joblib" 
+    }, 
+
+    "split": {
+        "train_data": "elsa_brca_4bins_fold1_train.csv",
+        "test_data": "elsa_brca_4bins_fold1_test.csv"
+    },
+
+    "output": {
+        "domain": "elsa_brca_4bins_fold1_domain.json"
+    }
+}
