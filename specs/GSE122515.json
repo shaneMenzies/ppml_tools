@@ -1,0 +1,42 @@
+
+{ 
+    "data": [ 
+        "../data/PETS/GSE122515_Dataset_3_ensembl.tsv" 
+    ], 
+
+    "identifier_column": "Filename", 
+    "label_file": "../data/PETS/GSE122515_labels.csv", 
+    "label_column": "Disease", 
+    "label_mapping": { 
+        "AML": 1, 
+        "ALL": 2,
+        "CML": 3,
+        "CLL": 4
+    }, 
+    "use_jhu_id_transform": false,
+    "default_label": 0,
+ 
+    "discretize": { 
+        "quantiles": [ 
+            0.25, 
+            0.5, 
+            0.75 
+        ], 
+        "save_statistics": "GSE122515_multi_stats.joblib", 
+        "save_means": "GSE122515_multi_means.joblib", 
+        "save_quantiles": "GSE122515_multi_quantiles.joblib" 
+    }, 
+ 
+    "filter": "../data/PETS/landmark_genes_ensembl_filter.csv", 
+ 
+    "split": { 
+        "train_data": "GSE122515_multi_train.csv", 
+        "test_data": "GSE122515_multi_test.csv", 
+        "test_ratio": 0.2
+    }, 
+ 
+    "output": { 
+        "processed_data": "GSE122515_multi.csv", 
+        "domain": "GSE122515_multi_domain.json" 
+    } 
+} 

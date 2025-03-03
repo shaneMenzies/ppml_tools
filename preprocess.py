@@ -16,7 +16,7 @@ def jhu_id_transform(id):
 def filter_data(data, spec):
     if "filter" in spec:
         filter = read_file(spec["filter"])[["Symbol"]].values.flatten()
-        common_values = [val for val in filter if val in data.iloc[0]]
+        common_values = [val for val in filter if val in data.columns]
         for val in filter:
             if val not in common_values:
                 print("Warning: Value '", val, "' in filter not found in data!")
@@ -29,10 +29,10 @@ def load_data(spec):
     if isinstance(spec["data"], list):
         data_sources = []
         for file in spec["data"]:
-            print("Loading from ", file)
+            print("Loading from ", file, "(list)")
             next_df = read_file(file).transpose()
-            next_headers = next_df.iloc[1]
-            next_df = next_df.iloc[2:]
+            next_headers = next_df.iloc[0]
+            next_df = next_df.iloc[1:]
             next_df.columns = list(next_headers)
             next_df = filter_data(next_df, spec)
             data_sources.append(next_df)
@@ -87,20 +87,33 @@ def label_data(data, spec):
         id_column = spec["identifier_column"]
         label_column = spec["label_column"]
         mapping = spec["label_mapping"]
+        print(f"Matching inputs {data.index} to labels from {label_file[id_column]}, and applying mapping {mapping}")
 
         labels = {}
         for source_id in data.index:
-            id = jhu_id_transform(source_id)
-            label = label_file[label_file[id_column] == id][label_column].values[0]
+            if "use_jhu_id_transform" in spec and spec["use_jhu_id_transform"]:
+                id = jhu_id_transform(id)
+            else:
+                id = source_id
+            print(f"Finding label for {id}")
+            try:
+                label = label_file[label_file[id_column] == id][label_column].values[0]
+                print(f"Match for label in label file: {label}")
+            except:
+                print(f"Could not find match in label file")
+                label = None
             if label in mapping:
                 label = mapping[label]
             elif "default_label" in spec:
                 print("Did not find mapping for ", label, 
-                      ", using default label ", spec["default_mapping"])
-                label = spec["default_mapping"]
+                      ", using default label ", spec["default_label"])
+                label = spec["default_label"]
             else:
                 print("Warning: Unable to determine correct label for ", label)
             labels[source_id] = label
+
+        print(numpy.unique(numpy.array(list(labels.values())), return_counts=True))
+
         labels = pandas.Series(data=labels, name="label")
         return pandas.concat([labels, data], axis=1)
     else:
@@ -133,6 +146,7 @@ def discretize_data(data, spec):
         alphas = spec["discretize"]["quantiles"]
         bin_number = len(alphas) + 1
         data_copy = data.copy()
+        data = data.apply(pandas.to_numeric, errors='coerce')
         data_quantile = numpy.quantile(data, alphas, axis=0)
 
         statistic_dict = {}
@@ -140,7 +154,10 @@ def discretize_data(data, spec):
         quantile_dict = {}
         for col in data.columns:
             col_quantiles = data_quantile[:, data.columns.get_loc(col)]
-            discrete_col = numpy.digitize(data[col], col_quantiles)
+            try:
+                discrete_col = numpy.digitize(data[col], col_quantiles)
+            except:
+                print("Could not discretize column", col, data[col].values)
             data[col] = discrete_col
             quantile_dict[col] = col_quantiles
 
@@ -149,7 +166,16 @@ def discretize_data(data, spec):
             for bin_idx in range(bin_number):
                 bin_arr = data_copy[col][discrete_col == bin_idx]
                 statistic_dict[col].append(len(bin_arr))
-                mean_dict[col].append(numpy.mean(bin_arr) if len(bin_arr) > 0 else numpy.nan)
+                next_mean = numpy.mean(bin_arr)
+                if numpy.isnan(next_mean):
+                    # Estimate mean 
+                    if bin_idx == 0:
+                        next_mean = (numpy.min(data_copy[col]) + col_quantiles[0]) / 2
+                    elif bin_idx == (bin_number - 1):
+                        next_mean = (numpy.max(data_copy[col]) + col_quantiles[-1]) / 2
+                    else:
+                        next_mean = (col_quantiles[bin_idx] + col_quantiles[bin_idx + 1]) / 2
+                mean_dict[col].append(next_mean)
 
         if had_labels:
             data = pandas.concat([label_col, data], axis=1)
@@ -163,11 +189,11 @@ def discretize_data(data, spec):
         if "save_quantiles" in spec["discretize"]:
             write_file(quantile_dict, spec["discretize"]["save_quantiles"])
             print("Quantile data written to ", spec["discretize"]["save_quantiles"])
+    print("Data after discretization:\n", data)
     return data
 
 def preprocess(spec):
     data = load_data(spec)
-    #data = data.apply(pandas.to_numeric, errors='coerce')
     data = discretize_data(data, spec)
     data = label_data(data, spec)
 

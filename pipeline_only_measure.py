@@ -10,14 +10,29 @@ import os
 from preprocess import preprocess
 from generate import run_mechanism
 from measure import measure
+from deprocess import deprocess
 from ppml_utils import *
 
 def pipeline(args):
 
     os.makedirs(args.output_dir, exist_ok=True)
-    synth = read_file(args.data)
-    domain = read_file(args.domain)
+
+    if args.data != None:
+        synth = read_file(args.data)
+    else:
+        synth = read_file(os.path.join(args.output_dir, "synthetic_data.csv"))
+
+    if args.domain != None:
+        domain = read_file(args.domain)
+    elif args.spec != None:
+        pp_spec = read_file(args.spec)
+        domain = read_file(pp_spec["output"]["domain"])
     test = read_file(os.path.join(args.output_dir, "test_data.SENSITIVE.csv"))
+
+    # Optional deprocess
+    if args.deprocess:
+        pp_spec = read_file(args.spec)
+        deprocess(synth, pp_spec, args.output_dir)
 
     # Measure
     measure_args = types.SimpleNamespace(
@@ -45,10 +60,12 @@ def pipeline(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "Pipeline (Only Measurement)")
-    parser.add_argument("--data", required=True)
-    parser.add_argument("--domain", required=True)
+    parser.add_argument("--data")
+    parser.add_argument("--domain")
     parser.add_argument("-i", "--measure-iterations", default=1, type=int)
     parser.add_argument("-o", "--output-dir", required=True)
+    parser.add_argument("-s", "--spec")
+    parser.add_argument("--deprocess", action="store_true")
 
     args = parser.parse_args()
 

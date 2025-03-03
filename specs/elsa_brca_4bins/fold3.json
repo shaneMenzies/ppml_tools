@@ -34,17 +34,17 @@
             0.5, 
             0.75 
         ],
-        "save_statistics": "elsa_brca_4bins_fold1_stats.joblib", 
-        "save_means": "elsa_brca_4bins_fold1_means.joblib", 
-        "save_quantiles": "elsa_brca_4bins_fold1_quantiles.joblib" 
+        "save_statistics": "elsa_brca_4bins_fold3_stats.joblib", 
+        "save_means": "elsa_brca_4bins_fold3_means.joblib", 
+        "save_quantiles": "elsa_brca_4bins_fold3_quantiles.joblib" 
     }, 
 
     "split": {
-        "train_data": "elsa_brca_4bins_fold1_train.csv",
-        "test_data": "elsa_brca_4bins_fold1_test.csv"
+        "train_data": "elsa_brca_4bins_fold3_train.csv",
+        "test_data": "elsa_brca_4bins_fold3_test.csv"
     },
 
     "output": {
-        "domain": "elsa_brca_4bins_fold1_domain.json"
+        "domain": "elsa_brca_4bins_fold3_domain.json"
     }
 }

@@ -12,29 +12,32 @@ deprocess_args = [
 
 def dediscretize(synth, pp_spec, output_dir):
     mean_dict = read_file(pp_spec["discretize"]["save_means"])
-    print(mean_dict)
     exclude_columns = ["label", pp_spec["label_column"]]
-    data_processed = []
+    data_processed = pandas.DataFrame(dtype=float).reindex_like(synth)
     
-    for col in synth.columns:
+    for col_i in range(len(synth.columns)):
+        col = synth.columns[col_i]
         if col in exclude_columns:
-            # Append the unchanged column
-            data_processed.append(synth[col])
+            data_processed.loc[:, col] = synth.loc[:, col]
         else:
             # Retrieve the mean values for each bin in this column
             mean_labels = numpy.array(mean_dict[col])
+
+            def dedisc_element(bin):
+                if bin < len(mean_labels):
+                    if numpy.isnan(mean_labels[bin]):
+                        print(mean_labels)
+                        print(f"Error! Column {col} has NaN for bin {bin}!!")
+                        exit()
+                    return mean_labels[bin]
+                else:
+                    print(f"Error! Column {col} doesn't have mean for bin {bin}!!")
+        
     
             # Map each bin to its mean value for reconstruction
-            col_inverse = synth[col].apply(
-                    lambda x: mean_labels[x] if x < len(mean_labels) 
-                                             else numpy.nan)
-            data_processed.append(col_inverse)
+            data_processed.loc[:, col] = synth.loc[:, col].apply(dedisc_element)
     
-    # Combine all columns back into a DataFrame
-    data_processed_df = pandas.DataFrame(data_processed).T
-    data_processed_df.columns = synth.columns
-    
-    return data_processed_df 
+    return data_processed
 
 def relabel(synth, pp_spec):
     if "label_file" in pp_spec:
@@ -55,10 +58,8 @@ def relabel(synth, pp_spec):
     return synth
 
 def deprocess(synth, pp_spec, output_dir):
-    pp_spec = read_file(pp_spec)
-
-    synth = relabel(synth, pp_spec)
     synth = dediscretize(synth, pp_spec, output_dir)
+    synth = relabel(synth, pp_spec)
     synth.reset_index(drop=True, inplace=True)
     write_file(synth, os.path.join(output_dir, "synthetic_deprocessed.csv"), index=False)
 
@@ -69,9 +70,12 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--synth-data')
 
     args = vars(parser.parse_args())
+
+    pp_spec = read_file(args["spec"])
+
     if args["synth_data"] != None:
         synth = read_file(args["synth_data"])
     else:
         synth = read_file(os.path.join(args["output_dir"], "synthetic_data.csv"))
-    deprocess(synth, args["spec"], args["output_dir"])
+    deprocess(synth, pp_spec, args["output_dir"])
     
