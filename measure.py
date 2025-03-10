@@ -9,6 +9,7 @@ import os
 from matplotlib import pyplot
 from secrets import randbits
 from sklearn import metrics, model_selection
+from sklearn.svm import LinearSVC
 from ppml_utils import *
 
 average_types = ["micro", "macro", "weighted"]
@@ -110,8 +111,19 @@ def single_run_multi(train_x, train_y, test_x, test_y, lgb_params):
     classifier = lightgbm.LGBMClassifier(**lgb_params)
     classifier.fit(train_x, train_y)
 
+    alt_classifier = LinearSVC(**{
+        "C": 0.01, "penalty": "l1", "dual": False})
+    alt_classifier.fit(train_x, train_y)
+
     predictions = classifier.predict(test_x)
     prob_preds = classifier.predict_proba(test_x)
+
+    alt_predictions = alt_classifier.predict(test_x)
+    print(f"Alt Predictions: {alt_predictions}")
+    print(f"Real Labels: {test_y}")
+    print("Alternate F1 Macro Score:", metrics.f1_score(
+        test_y, alt_predictions, average="macro"
+        ))
 
     scores = pandas.DataFrame(index=multi_score_types, 
                               columns=average_types, dtype=float)
@@ -143,30 +155,28 @@ def run_multi(train, test, lgb_params, args, iterations):
         for row in scores.index:
             scores.loc[row, col] = numpy.empty(iterations, dtype=float)
 
+    if isinstance(train, pandas.DataFrame):
+        train_x = train.drop(columns=[label]).values
+        train_y = train[label].values
+    else:
+        train_x = train[:, 1:]
+        train_y = train[:, 0]
+    
+    if isinstance(test, pandas.DataFrame):
+        test_x = test.drop(columns=[label]).values
+        test_y = test[label].values
+    else:
+        test_x = test[:, 1:]
+        test_y = test[:, 0]
+
     if iterations > 1:
         for i in range(iterations):
-            shuffle_train = train.sample(frac=1)
-            shuffle_test = test.sample(frac=1)
-
-            train_x = shuffle_train.drop(columns=[label])
-            train_y = shuffle_train[label]
-            test_x = shuffle_test.drop(columns=[label])
-            test_y = shuffle_test[label]
-
             i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, lgb_params)
             for col in scores.columns:
                 for row in scores.index:
                     scores.loc[row, col][i] = i_scores[col][row]
             confusion_matrices.append(i_cm)
     else:
-        shuffle_train = train.sample(frac=1)
-        shuffle_test = test.sample(frac=1)
-
-        train_x = shuffle_train.drop(columns=[label])
-        train_y = shuffle_train[label]
-        test_x = shuffle_test.drop(columns=[label])
-        test_y = shuffle_test[label]
-
         i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, lgb_params)
         for col in scores.columns:
             for row in scores.index:
@@ -281,6 +291,13 @@ def measure(train, test, args):
     label = args.label_column
     verbose = args.verbose
     iterations = args.iterations
+
+    print("Train data:")
+    print(train)
+    print(train.shape)
+    print("Test data:")
+    print(test)
+    print(test.shape)
 
     if binary:
         print("Using Binary Labels\n")

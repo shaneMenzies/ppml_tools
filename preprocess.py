@@ -30,10 +30,12 @@ def load_data(spec):
         data_sources = []
         for file in spec["data"]:
             print("Loading from ", file, "(list)")
-            next_df = read_file(file).transpose()
-            next_headers = next_df.iloc[0]
-            next_df = next_df.iloc[1:]
-            next_df.columns = list(next_headers)
+            next_df = read_file(file)
+            if "transpose" in spec and spec["transpose"]:
+                next_df = next_df.transpose()
+                next_headers = next_df.iloc[0]
+                next_df = next_df.iloc[1:]
+                next_df.columns = list(next_headers)
             next_df = filter_data(next_df, spec)
             data_sources.append(next_df)
         return pandas.concat(data_sources, axis=0).dropna(axis=1)
@@ -95,18 +97,14 @@ def label_data(data, spec):
                 id = jhu_id_transform(id)
             else:
                 id = source_id
-            print(f"Finding label for {id}")
             try:
                 label = label_file[label_file[id_column] == id][label_column].values[0]
-                print(f"Match for label in label file: {label}")
             except:
                 print(f"Could not find match in label file")
                 label = None
             if label in mapping:
                 label = mapping[label]
             elif "default_label" in spec:
-                print("Did not find mapping for ", label, 
-                      ", using default label ", spec["default_label"])
                 label = spec["default_label"]
             else:
                 print("Warning: Unable to determine correct label for ", label)
@@ -116,7 +114,7 @@ def label_data(data, spec):
 
         labels = pandas.Series(data=labels, name="label")
         return pandas.concat([labels, data], axis=1)
-    else:
+    elif "label_mapping" in spec:
         label_column = spec["label_column"]
         mapping = spec["label_mapping"]
         labels = data[label_column].to_list()
@@ -133,7 +131,7 @@ def label_data(data, spec):
                 print("Warning: Unable to determine correct label for ", label)
             labels[i] = label
         data.insert(0, "label", labels)
-        return data
+    return data
 
 def discretize_data(data, spec):
     if "discretize" in spec:
@@ -189,13 +187,15 @@ def discretize_data(data, spec):
         if "save_quantiles" in spec["discretize"]:
             write_file(quantile_dict, spec["discretize"]["save_quantiles"])
             print("Quantile data written to ", spec["discretize"]["save_quantiles"])
-    print("Data after discretization:\n", data)
     return data
 
 def preprocess(spec):
     data = load_data(spec)
+    print("Loaded data:\n", data)
     data = discretize_data(data, spec)
+    print("Data after discretization:\n", data)
     data = label_data(data, spec)
+    print("Labelled data:\n", data)
 
     print("Shape of combined, labelled data (rows, columns): ", data.shape)
 
@@ -203,7 +203,15 @@ def preprocess(spec):
     if "domain" in spec["output"]:
         domain = {}
         for col in data.columns:
-            domain[str(col)] = data[col].nunique()
+            if col == "label" or ("label_column" in spec and col == spec["label_column"]):
+                domain[str(col)] = data[col].nunique()
+            elif "discretize" in spec:
+                domain[str(col)] = len(spec["discretize"]["quantiles"]) + 1
+            elif "non_label_domain" in spec:
+                domain[str(col)] = spec["non_label_domain"]
+            else:
+                domain[str(col)] = data[col].nunique()
+                
         results["domain"] = domain
         write_file(domain, spec["output"]["domain"])
         print("Domain written to ", spec["output"]["domain"])
@@ -226,12 +234,12 @@ def split_data(data, spec):
                       "as seed for train/test split")
                 seed = spec["split"]["seed"]
             else:
-                seed = randbits(32)
+                seed = 4000 #randbits(32)
             print("Using random seed", seed, "for train/test split")
             train, test = train_test_split(
                     data, 
-                    test_size=spec["split"]["test_ratio"], shuffle=True, 
-                    random_state=seed, stratify=data['label']
+                    test_size=spec["split"]["test_ratio"], #shuffle=True, 
+                    random_state=seed #,stratify=data['label']
                     )
         elif "train_test_merge_row" in spec:
             train_test_merge_first_test = spec["train_test_merge_row"]

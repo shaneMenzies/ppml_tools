@@ -1,0 +1,56 @@
+{
+    "data": {
+        "train": {
+            "x": [
+                "../data/ELSA/TCGA-BRCA/real/X_train_real_split_5.csv"
+            ],
+            "y": [
+                "../data/ELSA/TCGA-BRCA/real/y_train_real_split_5.csv"
+            ]
+        },
+
+        "test": {
+            "x": [
+                "../data/ELSA/TCGA-BRCA/real/X_test_real_split_5.csv"
+            ],
+            "y": [
+                "../data/ELSA/TCGA-BRCA/real/y_test_real_split_5.csv"
+            ]
+        }
+    },
+
+    "label_column": "Subtype",
+    "label_mapping": {
+        "BRCA.LumA" : 0,
+        "BRCA.LumB": 1,
+        "BRCA.Her2": 2,
+        "BRCA.Normal": 3,
+        "BRCA.Basal": 4
+    },
+
+    "discretize": { 
+        "quantiles": [
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9
+        ],
+        "save_statistics": "elsa_brca_10bins_fold5_stats.joblib", 
+        "save_means": "elsa_brca_10bins_fold5_means.joblib", 
+        "save_quantiles": "elsa_brca_10bins_fold5_quantiles.joblib" 
+    }, 
+
+    "split": {
+        "train_data": "elsa_brca_10bins_fold5_train.csv",
+        "test_data": "elsa_brca_10bins_fold5_test.csv"
+    },
+
+    "output": {
+        "domain": "elsa_brca_10bins_fold5_domain.json"
+    }
+}

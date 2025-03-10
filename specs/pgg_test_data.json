@@ -1,0 +1,21 @@
+{
+    "data": [
+        "../PRO-GENE-GEN/models/Private_PGM/whole_data.csv"
+    ],
+
+    "transpose": false,
+
+    "label_column": "label",
+
+    "split": {
+        "test_ratio": 0.2,
+        "train_data": "pgg_aml_test_data_train.csv",
+        "test_data": "pgg_aml_test_data_test.csv"
+    },
+
+    "non_label_domain": 4,
+
+    "output": {
+        "domain": "pgg_aml_test_data_domain.json"
+    }
+}

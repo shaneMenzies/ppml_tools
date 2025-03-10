@@ -7,6 +7,8 @@ import json
 import sys
 import os
 import traceback
+import concurrent
+import copy
 
 from secrets import randbits
 from ppml_utils import *
@@ -29,7 +31,7 @@ default_args = {
         "domain": None,
         "label_col": "label",
         "epsilon": 1.0,
-        "delta": 1e-8,
+        "delta": 1e-5,
         "rng_seed": None,
         "degree": 2,
         "max_cells": 10000,
@@ -116,30 +118,61 @@ def mech_mwem(args):
     error = workload_error(data, synth, workload)
     return synth.df, error
 
+def save_object(obj, filename):
+    with open(filename, "wb") as output:
+        import pickle
+        pickle.dump(obj, output, protocol=2)
+
+def load_object(filename):
+    with open(filename, "rb") as input:
+        import pickle
+        return pickle.load(input)
+
 def mech_pgg(args):
+    data = args["dataset"]
+    domain = args["domain"]
+
     pgg = importlib.import_module("model")
     pgg_model = pgg.Private_PGM(args["label_col"], True, 
                             args["epsilon"], args["delta"])
-    pgg_model.train(args["dataset"], args["domain"], num_iters=2500)
-    synth = pgg_model.generate(num_rows=args["dataset"].shape[0])
+    pgg_model.train(data, args["domain"], num_iters=10000)
+    save_object(pgg_model, "model.pkl")
+    synth = pgg_model.generate(num_rows=data.shape[0])
     # pgg always puts label column at the end
-    synth[:, 0], synth[:, -1] = synth[:, -1].copy(), synth[:, 0].copy()
+    synth_x, synth_y = synth[:, :-1], synth[:, -1]
+    synth = numpy.hstack([numpy.array([synth_y]).T, synth_x])
     synth = pandas.DataFrame(synth, columns=args["dataset"].columns)
 
     data = make_dataset(args["dataset"], args["domain"])
     synth_ds = make_dataset(synth, args["domain"])
     workload = determine_workload(args, data)
     error = workload_error(data, synth_ds, workload)
+    return synth, error
+
+def load_pgg(args, load_dir=".", pgg_model=None):
+    #pgg = importlib.import_module("model")
+    if pgg_model == None:
+        pgg_model = load_object(os.path.join(load_dir, "model.pkl"))
+    synth = pgg_model.generate()
+    # pgg always puts label column at the end
+    synth_x, synth_y = synth[:, :-1], synth[:, -1]
+    synth = numpy.hstack([numpy.array([synth_y]).T, synth_x])
+    synth = pandas.DataFrame(synth, columns=args["dataset"].columns)
+
+    print("Final synthetic data being returned:")
+    print(synth.values)
+    error = -1.0
     return synth, error
 
 def mech_pgg_nodp(args):
     pgg = importlib.import_module("model")
     pgg_model = pgg.Private_PGM(args["label_col"], False, 8, 1e-5)
                             
-    pgg_model.train(args["dataset"], args["domain"], num_iters=2500)
+    pgg_model.train(args["dataset"], args["domain"], num_iters=10000)
     synth = pgg_model.generate(num_rows=args["dataset"].shape[0])
     # pgg always puts label column at the end
-    synth[:, 0], synth[:, -1] = synth[:, -1].copy(), synth[:, 0].copy()
+    synth_x, synth_y = synth[:, :-1], synth[:, -1]
+    synth = numpy.hstack([numpy.array([synth_y]).T, synth_x])
     synth = pandas.DataFrame(synth, columns=args["dataset"].columns)
 
     data = make_dataset(args["dataset"], args["domain"])
@@ -147,6 +180,136 @@ def mech_pgg_nodp(args):
     workload = determine_workload(args, data)
     error = workload_error(data, synth_ds, workload)
     return synth, error
+
+def mech_pgg_part(part, domain, args):
+    pgg = importlib.import_module("model")
+    model = pgg.Private_PGM(args["label_col"], True, 
+                            args["epsilon"], args["delta"])
+    label_val = part[args["label_col"]].iloc[0]
+    model.train(part, domain, num_iters=2500)
+    synth = model.generate(num_rows=part.shape[0])
+    # pgg always puts label column at the end
+    synth_x, synth_y = synth[:, :-1], synth[:, -1]
+    synth_y[:] = label_val
+    synth = numpy.hstack([numpy.array([synth_y]).T, synth_x])
+    synth = pandas.DataFrame(synth, columns=part.columns)
+    return synth
+
+def mech_pgg_split(args):
+    pgg = importlib.import_module("model")
+    data = args["dataset"]
+    labels = data[args["label_col"]]
+    split_domain = args["domain"].copy()
+    split_domain[args["label_col"]] = 1
+
+    label_values = numpy.unique(numpy.asarray(labels.values))
+    data_parts = []
+
+    for label in label_values:
+        data_parts.append(data.loc[data[args["label_col"]] == label])
+
+    executor = concurrent.futures.ProcessPoolExecutor(4)
+    processes = [executor.submit(mech_pgg_part, part, split_domain, args) for part in data_parts]
+    concurrent.futures.wait(processes)
+
+    synth_parts = [proc.result() for proc in processes]
+    synth = pandas.concat(synth_parts)
+    print(synth)
+    data = make_dataset(args["dataset"], args["domain"])
+    synth_ds = make_dataset(synth, args["domain"])
+    workload = determine_workload(args, data)
+    error = workload_error(data, synth_ds, workload)
+    return synth, error
+
+def mech_pgg_retrain_part(model, part, domain, args):
+    pgg = importlib.import_module("model")
+    label_val = part[args["label_col"]].iloc[0]
+    model.train(part, domain, num_iters=2500)
+    synth = model.generate(num_rows=part.shape[0])
+    # pgg always puts label column at the end
+    synth_x, synth_y = synth[:, :-1], synth[:, -1]
+    synth_y[:] = label_val
+    synth = numpy.hstack([numpy.array([synth_y]).T, synth_x])
+    synth = pandas.DataFrame(synth, columns=part.columns)
+    return synth
+
+def mech_pgg_split_retrain(args):
+    pgg = importlib.import_module("model")
+    data = args["dataset"]
+    domain = args["domain"]
+    labels = data[args["label_col"]]
+    split_domain = args["domain"].copy()
+    split_domain[args["label_col"]] = 1
+
+    # Train base model
+    model = pgg.Private_PGM(args["label_col"], True, args["epsilon"] / 2, 
+                            args["delta"])
+    model.train(data, domain, num_iters=2500)
+
+    label_values = numpy.unique(numpy.asarray(labels.values))
+    data_parts = []
+
+    for label in label_values:
+        data_parts.append(data.loc[data[args["label_col"]] == label])
+
+    executor = concurrent.futures.ProcessPoolExecutor(4)
+    processes = [executor.submit(mech_pgg_retrain_part, copy.deepcopy(model), part, split_domain, args) for part in data_parts]
+    concurrent.futures.wait(processes)
+
+    synth_parts = [proc.result() for proc in processes]
+    synth = pandas.concat(synth_parts)
+    print(synth)
+    data = make_dataset(args["dataset"], args["domain"])
+    synth_ds = make_dataset(synth, args["domain"])
+    workload = determine_workload(args, data)
+    error = workload_error(data, synth_ds, workload)
+    return synth, error
+
+def mech_pgg_sep_part(pretrain, part, domain, args):
+    pgg = importlib.import_module("model")
+    model = pgg.Private_PGM(args["label_col"], True, 
+                            args["epsilon"], args["delta"])
+    label_val = part[args["label_col"]].iloc[0]
+    model.train(pretrain, domain, num_iters=2500)
+    domain[args["label_col"]] = 1
+    model.train(part, domain, num_iters=2500)
+    synth = model.generate(num_rows=part.shape[0])
+    # pgg always puts label column at the end
+    synth_x, synth_y = synth[:, :-1], synth[:, -1]
+    synth_y[:] = label_val
+    synth = numpy.hstack([numpy.array([synth_y]).T, synth_x])
+    synth = pandas.DataFrame(synth, columns=part.columns)
+    return synth
+
+def mech_pgg_label_sep(args):
+    pgg = importlib.import_module("model")
+    data = args["dataset"]
+    labels = data[args["label_col"]]
+    split_domain = args["domain"].copy()
+    split_domain[args["label_col"]] = split_domain[args["label_col"]] - 1
+
+    label_values = numpy.unique(numpy.asarray(labels.values))
+    pretrain_parts = []
+    fine_parts = []
+
+    for label in label_values:
+        pretrain_parts.append(data.loc[data[args["label_col"]] != label])
+        fine_parts.append(data.loc[data[args["label_col"]] == label])
+
+    executor = concurrent.futures.ProcessPoolExecutor(4)
+    processes = [executor.submit(mech_pgg_sep_part, pretrain, fine, split_domain, args) for pretrain, fine in zip(pretrain_parts, fine_parts)]
+    concurrent.futures.wait(processes)
+
+    synth_parts = [proc.result() for proc in processes]
+    synth = pandas.concat(synth_parts)
+    print(synth)
+    data = make_dataset(args["dataset"], args["domain"])
+    synth_ds = make_dataset(synth, args["domain"])
+    workload = determine_workload(args, data)
+    error = workload_error(data, synth_ds, workload)
+    return synth, error
+
+
 
 def mech_real(args):
     real_data = args["dataset"]
@@ -223,6 +386,10 @@ mechanisms = {
         "mwem": mech_mwem, 
         "pro_gene_gen": mech_pgg,
         "pro_gene_gen_nodp": mech_pgg_nodp,
+        "pro_gene_gen_split": mech_pgg_split,
+        "pro_gene_gen_retrain": mech_pgg_split_retrain,
+        "pro_gene_gen_pretrain": mech_pgg_label_sep,
+        "pro_gene_gen_load": load_pgg,
         "real": mech_real,
         "tabddpm": mech_tabddpm,
         }
@@ -232,7 +399,7 @@ def run_mechanism(directory, mechanism, args):
     if mechanism == "tabddpm":
         return mech_tabddpm(directory, args)
     else:
-        if mechanism == "pro_gene_gen" or mechanism == "pro_gene_gen_nodp":
+        if mechanism.startswith("pro_gene_gen"):
             sys.path.insert(0, os.path.join(directory, "../.."))
     return mechanisms[mechanism](fill_with_defaults(args))
 

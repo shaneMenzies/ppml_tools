@@ -3,6 +3,7 @@
     "data": [ 
         "../data/PETS/GSE122515_Dataset_3_ensembl.tsv" 
     ], 
+    "transpose": true,
 
     "identifier_column": "Filename", 
     "label_file": "../data/PETS/GSE122515_labels.csv", 

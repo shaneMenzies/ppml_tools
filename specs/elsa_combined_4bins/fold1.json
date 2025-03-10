@@ -45,6 +45,7 @@
         "save_means": "elsa_combined_4bins_fold1_means.joblib", 
         "save_quantiles": "elsa_combined_4bins_fold1_quantiles.joblib" 
     }, 
+    "non_label_domain": 4,
 
     "split": {
         "train_data": "elsa_combined_4bins_fold1_train.csv",

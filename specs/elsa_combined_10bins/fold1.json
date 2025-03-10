@@ -37,21 +37,28 @@
 
     "discretize": { 
         "quantiles": [ 
-            0.25, 
-            0.5, 
-            0.75 
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9
         ], 
-        "save_statistics": "elsa_combined_4bins_fold1_stats.joblib", 
-        "save_means": "elsa_combined_4bins_fold1_means.joblib", 
-        "save_quantiles": "elsa_combined_4bins_fold1_quantiles.joblib" 
+        "save_statistics": "elsa_combined_10bins_fold1_stats.joblib", 
+        "save_means": "elsa_combined_10bins_fold1_means.joblib", 
+        "save_quantiles": "elsa_combined_10bins_fold1_quantiles.joblib" 
     }, 
+    "non_label_domain": 4,
 
     "split": {
-        "train_data": "elsa_combined_4bins_fold1_train.csv",
-        "test_data": "elsa_combined_4bins_fold1_test.csv"
+        "train_data": "elsa_combined_10bins_fold1_train.csv",
+        "test_data": "elsa_combined_10bins_fold1_test.csv"
     },
 
     "output": {
-        "domain": "elsa_combined_4bins_fold1_domain.json"
+        "domain": "elsa_combined_10bins_fold1_domain.json"
     }
 }

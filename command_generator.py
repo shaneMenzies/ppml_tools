@@ -43,7 +43,7 @@ def collate_command(values):
     iterations = ""
     for i in range(values["iteration"] + 1):
         iterations += f"./{i}/" 
-    return f"cd {collation_dir} && {values["prefix"]} {collate_loc} {iterations} -t {title} \n"
+    return f"cd {collation_dir} && {values["prefix"]} {collate_loc} {iterations} -t \"{title}\" \n"
 
 command_generator_args = [
         "prefix",
