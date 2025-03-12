@@ -23,7 +23,8 @@ mechanism_args = [
         "degree",
         "max_cells",
         "num_marginals",
-        "output_dir"
+        "output_dir",
+        "checkpoint_loc"
         ]
 
 default_args = {
@@ -33,10 +34,11 @@ default_args = {
         "epsilon": 1.0,
         "delta": 1e-5,
         "rng_seed": None,
-        "degree": 2,
+        "degree": 1,
         "max_cells": 10000,
         "num_marginals": None,
-        "output_dir": "."
+        "output_dir": ".",
+        "checkpoint_loc": None
         }
 
 def fill_with_defaults(args):
@@ -93,9 +95,30 @@ def mech_aim(args):
     from mbi import Dataset, Domain
     aim = importlib.import_module("aim")
     data = make_dataset(args["dataset"], args["domain"])
+    print("Formed dataset")
     workload = determine_workload(args, data)
     aim_workload = [(cl, 1.0) for cl in workload]
+    print("Made workload")
     model, synth = aim.AIM(args["epsilon"], args["delta"]).run(data, aim_workload)
+    error = workload_error(data, synth, workload)
+    return synth.df, error 
+
+def mech_aim_cp(args): 
+    if args["checkpoint_loc"] != None:
+        checkpoint_loc = args["checkpoint_loc"]
+    else:
+        checkpoint_loc = os.path.join(args["output_dir"], "aim_checkpoint.pkl")
+
+    from mbi import Dataset, Domain
+    aim_cp = importlib.import_module("aim_cp")
+    data = make_dataset(args["dataset"], args["domain"])
+    print("Formed dataset")
+    workload = determine_workload(args, data)
+    aim_workload = [(cl, 1.0) for cl in workload]
+    print("Made workload")
+    model, synth = aim_cp.AIM(
+            args["epsilon"], args["delta"]).run(
+                    data, aim_workload, checkpoint_loc)
     error = workload_error(data, synth, workload)
     return synth.df, error 
 
@@ -382,6 +405,7 @@ def mech_tabddpm(tabddpm_dir, args):
 
 mechanisms = {
         "aim": mech_aim,
+        "aim_cp": mech_aim_cp,
         "mst": mech_mst, 
         "mwem": mech_mwem, 
         "pro_gene_gen": mech_pgg,
