@@ -9,6 +9,7 @@ import os
 from matplotlib import pyplot
 from secrets import randbits
 from sklearn import metrics, model_selection
+from sklearn.preprocessing import LabelBinarizer
 from sklearn.svm import SVC
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -16,8 +17,8 @@ from ppml_utils import *
 
 average_types = ["micro", "macro", "weighted"]
 
-binary_score_types = ["f1", "recall", "auc"]
-multi_score_types = ["f1", "recall", "auc_ovo", "auc_ovr"]
+binary_score_types = ["accuracy", "average_precision", "f1", "recall", "auc"]
+multi_score_types = ["accuracy","average_precision", "f1", "recall", "auc_ovo", "auc_ovr"]
 
 def single_run_binary(train_x, train_y, test_x, test_y, classifier):
     classifier.fit(train_x, train_y)
@@ -27,7 +28,10 @@ def single_run_binary(train_x, train_y, test_x, test_y, classifier):
 
     scores = pandas.DataFrame(index=binary_score_types, 
                               columns=average_types, dtype=float)
+    
     for avg in average_types:
+        scores.loc["accuracy", avg] = metrics.accuracy_score(test_y, predictions)
+        scores.loc["average_precision", avg] = metrics.average_precision_score(test_y, prob_preds, average=avg)
         scores.loc["f1", avg] = metrics.f1_score(test_y, predictions, average=avg)
         scores.loc["recall", avg] = metrics.recall_score(test_y, predictions, average=avg)
         try:
@@ -112,9 +116,24 @@ def single_run_multi(train_x, train_y, test_x, test_y, classifier):
     predictions = classifier.predict(test_x)
     prob_preds = classifier.predict_proba(test_x)
 
+    binarizer = LabelBinarizer()
+    binarizer.fit(predictions)
+    encoded_test_y = binarizer.fit_transform(test_y)
+    encoded_preds = binarizer.transform(predictions)
+
+    if (prob_preds.shape[1] < encoded_test_y.shape[1]):
+        pad = numpy.zeros((prob_preds.shape[0], encoded_test_y.shape[1] - prob_preds.shape[1]))
+        prob_preds = numpy.hstack((prob_preds, pad))
+
+    print(encoded_test_y)
+    print(encoded_test_y.size, prob_preds.size)
+    print(encoded_test_y.shape, prob_preds.shape)
+
     scores = pandas.DataFrame(index=multi_score_types, 
                               columns=average_types, dtype=float)
     for avg in average_types:
+        scores.loc["accuracy", avg] = metrics.accuracy_score(test_y, predictions)
+        scores.loc["average_precision", avg] = metrics.average_precision_score(encoded_test_y, encoded_preds, average=avg)
         try:
             scores.loc["f1", avg] = metrics.f1_score(
                     test_y, predictions, average=avg)
