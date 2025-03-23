@@ -1,0 +1,35 @@
+
+{ 
+    "data": {
+        "train": {
+            "x": [
+                "../data/AML_VG/train.csv"
+            ],
+            "y": [
+                "../data/AML_VG/trainlabel.csv"
+            ]
+        },
+
+        "test": {
+            "x": [
+                "../data/AML_VG/test.csv"
+            ],
+            "y": [
+                "../data/AML_VG/testlabel.csv"
+            ]
+        }
+    }, 
+
+
+    "drop_cols": [
+        "CellType"
+    ],
+
+    "label_column": "label", 
+ 
+    "split": {}, 
+ 
+    "output": { 
+        "domain": "AML_VG_domain.json" 
+    } 
+} 

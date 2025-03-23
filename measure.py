@@ -9,7 +9,9 @@ import os
 from matplotlib import pyplot
 from secrets import randbits
 from sklearn import metrics, model_selection
-from sklearn.svm import LinearSVC
+from sklearn.svm import SVC
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.linear_model import LogisticRegression
 from ppml_utils import *
 
 average_types = ["micro", "macro", "weighted"]
@@ -17,9 +19,7 @@ average_types = ["micro", "macro", "weighted"]
 binary_score_types = ["f1", "recall", "auc"]
 multi_score_types = ["f1", "recall", "auc_ovo", "auc_ovr"]
 
-def single_run_binary(train_x, train_y, test_x, test_y, lgb_params):
-    lgb_params["seed"] = randbits(64)
-    classifier = lightgbm.LGBMClassifier(**lgb_params)
+def single_run_binary(train_x, train_y, test_x, test_y, classifier):
     classifier.fit(train_x, train_y)
 
     predictions = classifier.predict(test_x)
@@ -38,7 +38,7 @@ def single_run_binary(train_x, train_y, test_x, test_y, lgb_params):
     confusion_matrix = metrics.confusion_matrix(test_y, predictions)
     return (scores, confusion_matrix)
 
-def run_binary(train, test, lgb_params, args, iterations):
+def run_binary(train, test, classifier,args, iterations):
     scores = pandas.DataFrame(index=binary_score_types, 
                               columns=average_types, 
                               dtype=object
@@ -60,7 +60,7 @@ def run_binary(train, test, lgb_params, args, iterations):
             test_x = shuffle_test.drop(columns=[label])
             test_y = shuffle_test[label]
 
-            i_scores, i_cm = single_run_binary(train_x, train_y, test_x, test_y, lgb_params)
+            i_scores, i_cm = single_run_binary(train_x, train_y, test_x, test_y, classifier)
             for col in scores.columns:
                 for row in scores.index:
                     scores.loc[row, col][i] = i_scores[col][row]
@@ -74,12 +74,12 @@ def run_binary(train, test, lgb_params, args, iterations):
         test_x = shuffle_test.drop(columns=[label])
         test_y = shuffle_test[label]
 
-        scores, i_cm = single_run_binary(train_x, train_y, test_x, test_y, lgb_params)
+        scores, i_cm = single_run_binary(train_x, train_y, test_x, test_y, classifier)
         confusion_matrices.append(i_cm)
 
     return (scores, confusion_matrices)
 
-def run_binary_cv(train_x, train_y, lgb_params, iterations, cv_folds=5):
+def run_binary_cv(train_x, train_y, classifier, iterations, cv_folds=5):
     scores = pandas.DataFrame(index=binary_score_types, 
                               columns=average_types, 
                               dtype=object
@@ -98,7 +98,7 @@ def run_binary_cv(train_x, train_y, lgb_params, iterations, cv_folds=5):
                                                train_y.iloc[train_fold], 
                                                train_x.iloc[test_fold], 
                                                train_y.iloc[test_fold], 
-                                               lgb_params)
+                                               classifier)
             for col in scores.columns:
                 for row in scores.index:
                     scores.loc[row, col][i_base + i_fold] = i_scores[col][row]
@@ -106,50 +106,50 @@ def run_binary_cv(train_x, train_y, lgb_params, iterations, cv_folds=5):
 
     return (scores, confusion_matrices)
 
-def single_run_multi(train_x, train_y, test_x, test_y, lgb_params):
-    lgb_params["seed"] = randbits(64)
-    classifier = lightgbm.LGBMClassifier(**lgb_params)
+def single_run_multi(train_x, train_y, test_x, test_y, classifier):
     classifier.fit(train_x, train_y)
-
-    alt_classifier = LinearSVC(**{
-        "C": 0.01, "penalty": "l1", "dual": False})
-    alt_classifier.fit(train_x, train_y)
 
     predictions = classifier.predict(test_x)
     prob_preds = classifier.predict_proba(test_x)
 
-    alt_predictions = alt_classifier.predict(test_x)
-    print(f"Alt Predictions: {alt_predictions}")
-    print(f"Real Labels: {test_y}")
-    print("Alternate F1 Macro Score:", metrics.f1_score(
-        test_y, alt_predictions, average="macro"
-        ))
-
     scores = pandas.DataFrame(index=multi_score_types, 
                               columns=average_types, dtype=float)
     for avg in average_types:
-        scores.loc["f1", avg] = metrics.f1_score(
-                test_y, predictions, average=avg)
-        scores.loc["recall", avg] = metrics.recall_score(
-                test_y, predictions, average=avg)
+        try:
+            scores.loc["f1", avg] = metrics.f1_score(
+                    test_y, predictions, average=avg)
+        except:
+            scores.loc["f1", avg] = -1.0
+
+        try:
+            scores.loc["recall", avg] = metrics.recall_score(
+                    test_y, predictions, average=avg)
+        except:
+            scores.loc["recall", avg] = -1.0
+
         if avg != "micro":
-            scores.loc["auc_ovo", avg] = metrics.roc_auc_score(
-                    test_y, prob_preds, average=avg, multi_class="ovo")
+            try:
+                scores.loc["auc_ovo", avg] = metrics.roc_auc_score(
+                        test_y, prob_preds, average=avg, multi_class="ovo")
+            except:
+                scores.loc["auc_ovo", avg] = -1.0
         else:
             scores.loc["auc_ovo", avg] = -1.0
-        scores.loc["auc_ovr", avg] = metrics.roc_auc_score(
-                test_y, prob_preds, average=avg, multi_class="ovr")
+        try:
+            scores.loc["auc_ovr", avg] = metrics.roc_auc_score(
+                    test_y, prob_preds, average=avg, multi_class="ovr")
+        except:
+            scores.loc["auc_ovr", avg] = -1.0
 
     confusion_matrix = metrics.confusion_matrix(test_y, predictions)
     return (scores, confusion_matrix)
 
-def run_multi(train, test, lgb_params, args, iterations):
+def run_multi(train, test, classifier, args, iterations):
     scores = pandas.DataFrame(index=multi_score_types, 
                               columns=average_types,
                               dtype=object)
     confusion_matrices = []
     label = args.label_column
-    print(iterations, "measure iterations")
 
     for col in scores.columns:
         for row in scores.index:
@@ -171,13 +171,13 @@ def run_multi(train, test, lgb_params, args, iterations):
 
     if iterations > 1:
         for i in range(iterations):
-            i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, lgb_params)
+            i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, classifier)
             for col in scores.columns:
                 for row in scores.index:
                     scores.loc[row, col][i] = i_scores[col][row]
             confusion_matrices.append(i_cm)
     else:
-        i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, lgb_params)
+        i_scores, i_cm = single_run_multi(train_x, train_y, test_x, test_y, classifier)
         for col in scores.columns:
             for row in scores.index:
                 scores.loc[row, col] = numpy.array(i_scores[col][row], ndmin=1)
@@ -185,7 +185,7 @@ def run_multi(train, test, lgb_params, args, iterations):
 
     return (scores, confusion_matrices)
 
-def run_multi_cv(train_x, train_y, lgb_params, iterations, cv_folds=5):
+def run_multi_cv(train_x, train_y, classifier, iterations, cv_folds=5):
     scores = pandas.DataFrame(index=multi_score_types, 
                               columns=average_types, 
                               dtype=object
@@ -204,7 +204,7 @@ def run_multi_cv(train_x, train_y, lgb_params, iterations, cv_folds=5):
                                                train_y.iloc[train_fold], 
                                                train_x.iloc[test_fold], 
                                                train_y.iloc[test_fold], 
-                                               lgb_params)
+                                               classifier)
             for col in scores.columns:
                 for row in scores.index:
                     scores.loc[row, col][i_base + i_fold] = i_scores[col][row]
@@ -275,8 +275,6 @@ def save_multi_hist_img(values, title, file, **kwargs):
     pyplot.legend()
     pyplot.savefig(file)
 
-
-
 measure_args = [
         "train_data",
         "test_data",
@@ -286,18 +284,12 @@ measure_args = [
         "verbose"
         ]
 
-def measure(train, test, args):
+def measure_lgbm(train, test, args):
     binary = args.binary
     label = args.label_column
     verbose = args.verbose
     iterations = args.iterations
 
-    print("Train data:")
-    print(train)
-    print(train.shape)
-    print("Test data:")
-    print(test)
-    print(test.shape)
 
     if binary:
         print("Using Binary Labels\n")
@@ -320,51 +312,113 @@ def measure(train, test, args):
 
     print("LGBM parameters: ", lgb_params)
 
-    if binary:
-        scores, confusion_matrices = run_binary(train, test, lgb_params, args, iterations)
-    else:
-        scores, confusion_matrices = run_multi(train, test, lgb_params, args, iterations)
+    classifier = lightgbm.LGBMClassifier(**lgb_params)
 
-    if iterations > 1:
-        avg_scores, avg_matrix = average_results(scores, confusion_matrices)
-        std_scores, std_matrix = std_results(scores, confusion_matrices)
+    if binary:
+        scores, confusion_matrices = run_binary(train, test, classifier, args, iterations)
+    else:
+        scores, confusion_matrices = run_multi(train, test, classifier, args, iterations)
+        
+    return scores, confusion_matrices
+
+def measure_linearSVC(train, test, args):
+    binary = args.binary
+    label = args.label_column
+    verbose = args.verbose
+    iterations = args.iterations
+
+    classifier = SVC(**{
+        "C": 0.01, "kernel": "linear", "probability": True})
+
+    if binary:
+        scores, confusion_matrices = run_binary(train, test, classifier, args, iterations)
+    else:
+        scores, confusion_matrices = run_multi(train, test, classifier, args, iterations)
+        
+    return scores, confusion_matrices
+
+def measure_skl_lr(train, test, args):
+    binary = args.binary
+    label = args.label_column
+    verbose = args.verbose
+    iterations = args.iterations
+
+    if binary:
+        classifier = LogisticRegression(max_iter=10000)
+        scores, confusion_matrices = run_binary(train, test, classifier, args, iterations)
+    else:
+        classifier = OneVsRestClassifier(LogisticRegression(max_iter=10000))
+        scores, confusion_matrices = run_multi(train, test, classifier, args, iterations)
+        
+    return scores, confusion_matrices
+
+measure_models = {
+        "lgbm": measure_lgbm,
+        "linearSVC": measure_linearSVC,
+        "skl_LogReg": measure_skl_lr
+        }
+
+def measure(train, test, args):
+    binary = args.binary
+    label = args.label_column
+    verbose = args.verbose
+    iterations = args.iterations
+
+    print("Train data:")
+    print(train)
+    print(train.shape)
+    print("Test data:")
+    print(test)
+    print(test.shape)
 
     out = args.output_dir
-
     scores_json = {}
-    for score_type in scores.index:
-        this_score = {}
-        for avg in scores.columns:
-            this_score[avg] = scores.loc[score_type, avg].tolist()
-        scores_json[score_type] = this_score
-            
+
+    for model in measure_models:
+        model_scores = {}
+        
+        scores, confusion_matrices = measure_models[model](train, test, args)
+
+        if iterations > 1:
+            avg_scores, avg_matrix = average_results(scores, confusion_matrices)
+            std_scores, std_matrix = std_results(scores, confusion_matrices)
+
+        for score_type in scores.index:
+            this_score = {}
+            for avg in scores.columns:
+                this_score[avg] = scores.loc[score_type, avg].tolist()
+            model_scores[score_type] = this_score
+                
+        scores_json[model] = model_scores
+
+        if iterations > 1:
+            write_file(avg_scores, os.path.join(out, model + "_avg_scores.csv"))
+            write_file(std_scores, os.path.join(out, model + "_std_scores.csv"))
+
+        numpy.save(os.path.join(out, model + "_all_cms.npy"), numpy.asarray(confusion_matrices))
+        if iterations > 1:
+            numpy.savetxt(os.path.join(out, model + "_avg_cm.txt"), avg_matrix)
+            numpy.savetxt(os.path.join(out, model + "_std_cm.txt"), std_matrix)
+        else:
+            numpy.savetxt(os.path.join(out, model + "_cm.txt"), confusion_matrices[0])
+
+        if iterations > 1:
+            save_cm_img(avg_matrix, f"Averaged Confusion Matrix ({model})", os.path.join(out, model + "_avg_cm.png"))
+            save_cm_img(std_matrix, f"Std. Dev. for Confusion Matrix ({model})", os.path.join(out, model + "_std_cm.png"))
+        else:
+            save_cm_img(confusion_matrices[0], f"Confusion Matrix ({model})", os.path.join(out, model + "_cm.png"))
+
+        if iterations > 1:
+            print(model + "Averages over", iterations, "runs:")
+            print_results(avg_scores, avg_matrix)
+            print(model + "Std. Dev:")
+            print_results(std_scores, std_matrix)
+        else:
+            print(model + "Results:")
+            print_results(scores, confusion_matrices)
 
     write_file(scores_json, os.path.join(out, "all_scores.json"))
-    if iterations > 1:
-        write_file(avg_scores, os.path.join(out, "avg_scores.csv"))
-        write_file(std_scores, os.path.join(out, "std_scores.csv"))
 
-    numpy.save(os.path.join(out, "all_cms.npy"), numpy.asarray(confusion_matrices))
-    if iterations > 1:
-        numpy.savetxt(os.path.join(out, "avg_cm.txt"), avg_matrix)
-        numpy.savetxt(os.path.join(out, "std_cm.txt"), std_matrix)
-    else:
-        numpy.savetxt(os.path.join(out, "cm.txt"), confusion_matrices[0])
-
-    if iterations > 1:
-        save_cm_img(avg_matrix, "Averaged Confusion Matrix", os.path.join(out, "avg_cm.png"))
-        save_cm_img(std_matrix, "Std. Dev. for Confusion Matrix", os.path.join(out, "std_cm.png"))
-    else:
-        save_cm_img(confusion_matrices[0], "Confusion Matrix", os.path.join(out, "cm.png"))
-
-    if iterations > 1:
-        print("Averages over", iterations, "runs:")
-        print_results(avg_scores, avg_matrix)
-        print("Std. Dev:")
-        print_results(std_scores, std_matrix)
-    else:
-        print("Results:")
-        print_results(scores, confusion_matrices)
     return (scores, confusion_matrices)
 
 

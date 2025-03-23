@@ -14,6 +14,11 @@ def jhu_id_transform(id):
     return '-'.join(id.split('.')[:4])
 
 def filter_data(data, spec):
+    print("Data before filter")
+    print(data)
+    if "drop_cols" in spec:
+        data = data.drop(columns=[col for col in spec["drop_cols"] if col in data.columns])
+
     if "filter" in spec:
         filter = read_file(spec["filter"])[["Symbol"]].values.flatten()
         common_values = [val for val in filter if val in data.columns]
@@ -22,6 +27,8 @@ def filter_data(data, spec):
                 print("Warning: Value '", val, "' in filter not found in data!")
         return data[common_values]
     else:
+
+        print("Data after filter")
         return data
 
 def load_data(spec):
@@ -30,7 +37,7 @@ def load_data(spec):
         data_sources = []
         for file in spec["data"]:
             print("Loading from ", file, "(list)")
-            next_df = read_file(file)
+            next_df = read_file(file, header=0)
             if "transpose" in spec and spec["transpose"]:
                 next_df = next_df.transpose()
                 next_headers = next_df.iloc[0]
@@ -47,9 +54,11 @@ def load_data(spec):
             for file_x, file_y in zip(spec["data"]["train"]["x"], 
                                       spec["data"]["train"]["y"]):
                 print("Loading from ", file_x, "and", file_y)
-                next_df = pandas.concat([read_file(file_y), 
-                                        read_file(file_x)],
-                                        axis=1)
+                data_x = read_file(file_x, header=0)
+                print(data_x)
+                data_y = read_file(file_y, header=0)
+                print(data_y)
+                next_df = pandas.concat([data_y, data_x],axis=1)
                 next_df = filter_data(next_df, spec)
                 data = pandas.concat([data, next_df], axis=0)
 
@@ -60,9 +69,11 @@ def load_data(spec):
                 for file_x, file_y in zip(spec["data"]["test"]["x"], 
                                           spec["data"]["test"]["y"]):
                     print("Loading from ", file_x, "and", file_y)
-                    next_df = pandas.concat([read_file(file_y), 
-                                            read_file(file_x)],
-                                            axis=1)
+                    data_x = read_file(file_x, header=0)
+                    print(data_x)
+                    data_y = read_file(file_y, header=0)
+                    print(data_y)
+                    next_df = pandas.concat([data_y, data_x],axis=1)
                     next_df = filter_data(next_df, spec)
                     data = pandas.concat([data, next_df], axis=0)
                 data = data.dropna(axis=1)
@@ -71,9 +82,11 @@ def load_data(spec):
             for file_x, file_y in zip(spec["data"]["x"], 
                                       spec["data"]["y"]):
                 print("Loading from ", file_x, "and", file_y)
-                next_df = pandas.concat([read_file(file_y), 
-                                        read_file(file_x)],
-                                        axis=1)
+                data_x = read_file(file_x)
+                print(data_x)
+                data_y = read_file(file_y)
+                print(data_y)
+                next_df = pandas.concat([data_y, data_x],axis=1)
                 next_df = filter_data(next_df, spec)
                 data = pandas.concat([data, next_df], axis=0)
             data = data.dropna(axis=1)
@@ -134,17 +147,18 @@ def label_data(data, spec):
     return data
 
 def discretize_data(data, spec):
+    if spec["label_column"] in data:
+        had_labels = True
+        label_col = data[spec["label_column"]]
+        data = data.drop(columns=spec["label_column"])
+    else:
+        had_labels = False
+    data = data.apply(pandas.to_numeric, errors='coerce')
+
     if "discretize" in spec:
-        if spec["label_column"] in data:
-            had_labels = True
-            label_col = data[spec["label_column"]]
-            data = data.drop(columns=spec["label_column"])
-        else:
-            had_labels = False
         alphas = spec["discretize"]["quantiles"]
         bin_number = len(alphas) + 1
         data_copy = data.copy()
-        data = data.apply(pandas.to_numeric, errors='coerce')
         data_quantile = numpy.quantile(data, alphas, axis=0)
 
         statistic_dict = {}
@@ -169,14 +183,12 @@ def discretize_data(data, spec):
                     # Estimate mean 
                     if bin_idx == 0:
                         next_mean = (numpy.min(data_copy[col]) + col_quantiles[0]) / 2
-                    elif bin_idx == (bin_number - 1):
+                    elif bin_idx == (bin_number - 2):
                         next_mean = (numpy.max(data_copy[col]) + col_quantiles[-1]) / 2
                     else:
                         next_mean = (col_quantiles[bin_idx] + col_quantiles[bin_idx + 1]) / 2
                 mean_dict[col].append(next_mean)
 
-        if had_labels:
-            data = pandas.concat([label_col, data], axis=1)
         
         if "save_statistics" in spec["discretize"]:
             write_file(statistic_dict, spec["discretize"]["save_statistics"])
@@ -187,6 +199,11 @@ def discretize_data(data, spec):
         if "save_quantiles" in spec["discretize"]:
             write_file(quantile_dict, spec["discretize"]["save_quantiles"])
             print("Quantile data written to ", spec["discretize"]["save_quantiles"])
+    if had_labels:
+        data = pandas.concat([label_col, data], axis=1)
+
+    for col in data.columns:
+        print(f"{col} Value spread: {list(zip(*numpy.unique(data[col].values, return_counts=True)))}")
     return data
 
 def preprocess(spec):

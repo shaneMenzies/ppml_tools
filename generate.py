@@ -68,8 +68,8 @@ def make_dataset(data, domain):
 
 def workload_error(real, synth, workload):
     error = -1.0
+    errors = []
     try:
-        errors = []
         for proj, wgt in workload:
             X = real.project(proj).datavector()
             Y = synth.project(proj).datavector()
@@ -81,12 +81,28 @@ def workload_error(real, synth, workload):
                 Y = Y / Y_sum
             e = 0.5 * numpy.linalg.norm(X - Y, 1)
             errors.append(e)
-        error = numpy.mean(numpy.asarray(errors))
-        print("Average Workload Error:", error)
-    except Exception as exc:
-        print("An exception occured in calculating workload error.")
-        print(type(exc))
-        print(exc)
+    except:
+        try:
+            for proj in workload:
+                X = real.project(proj).datavector()
+                Y = synth.project(proj).datavector()
+                X_sum = X.sum()
+                Y_sum = Y.sum()
+                if X_sum != 0:
+                    X = X / X_sum
+                if Y_sum != 0:
+                    Y = Y / Y_sum
+                e = 0.5 * numpy.linalg.norm(X - Y, 1)
+                errors.append(e)
+            error = numpy.mean(numpy.asarray(errors))
+
+        except Exception as exc:
+            print("An exception occured in calculating workload error.")
+            print(type(exc))
+            print(exc)
+
+    error = numpy.mean(numpy.asarray(errors))
+    print("Average Workload Error:", error)
 
     return error
 
@@ -151,6 +167,27 @@ def load_object(filename):
         import pickle
         return pickle.load(input)
 
+def mech_new_pgg(args):
+    data = args["dataset"]
+    domain = args["domain"]
+
+    pgg = importlib.import_module("pro_gene_gen")
+    pgg_model = pgg.Private_PGM(args["label_col"], True, 
+                            args["epsilon"], args["delta"])
+    pgg_model.train(data, args["domain"], num_iters=100)
+    save_object(pgg_model, "model.pkl")
+    synth = pgg_model.generate(num_rows=data.shape[0])
+    # pgg always puts label column at the end
+    synth_x, synth_y = synth[:, :-1], synth[:, -1]
+    synth = numpy.hstack([numpy.array([synth_y]).T, synth_x])
+    synth = pandas.DataFrame(synth, columns=args["dataset"].columns)
+
+    data = make_dataset(args["dataset"], args["domain"])
+    synth_ds = make_dataset(synth, args["domain"])
+    workload = determine_workload(args, data)
+    error = workload_error(data, synth_ds, workload)
+    return synth, error
+
 def mech_pgg(args):
     data = args["dataset"]
     domain = args["domain"]
@@ -158,7 +195,7 @@ def mech_pgg(args):
     pgg = importlib.import_module("model")
     pgg_model = pgg.Private_PGM(args["label_col"], True, 
                             args["epsilon"], args["delta"])
-    pgg_model.train(data, args["domain"], num_iters=10000)
+    pgg_model.train(data, args["domain"], num_iters=100)
     save_object(pgg_model, "model.pkl")
     synth = pgg_model.generate(num_rows=data.shape[0])
     # pgg always puts label column at the end
@@ -408,6 +445,7 @@ mechanisms = {
         "aim_cp": mech_aim_cp,
         "mst": mech_mst, 
         "mwem": mech_mwem, 
+        "new_pro_gene_gen": mech_new_pgg,
         "pro_gene_gen": mech_pgg,
         "pro_gene_gen_nodp": mech_pgg_nodp,
         "pro_gene_gen_split": mech_pgg_split,
