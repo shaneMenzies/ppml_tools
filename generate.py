@@ -24,7 +24,8 @@ mechanism_args = [
         "max_cells",
         "num_marginals",
         "output_dir",
-        "checkpoint_loc"
+        "checkpoint_loc",
+        "label_dist"
         ]
 
 default_args = {
@@ -38,7 +39,8 @@ default_args = {
         "max_cells": 10000,
         "num_marginals": None,
         "output_dir": ".",
-        "checkpoint_loc": None
+        "checkpoint_loc": None,
+        "label_dist": None
         }
 
 def fill_with_defaults(args):
@@ -167,14 +169,14 @@ def load_object(filename):
         import pickle
         return pickle.load(input)
 
-def mech_new_pgg(args):
+def mech_pgg(args):
     data = args["dataset"]
     domain = args["domain"]
 
-    pgg = importlib.import_module("pro_gene_gen")
+    pgg = importlib.import_module("model")
     pgg_model = pgg.Private_PGM(args["label_col"], True, 
                             args["epsilon"], args["delta"])
-    pgg_model.train(data, args["domain"], num_iters=100)
+    pgg_model.train(data, args["domain"], num_iters=2000)
     save_object(pgg_model, "model.pkl")
     synth = pgg_model.generate(num_rows=data.shape[0])
     # pgg always puts label column at the end
@@ -188,16 +190,16 @@ def mech_new_pgg(args):
     error = workload_error(data, synth_ds, workload)
     return synth, error
 
-def mech_pgg(args):
+def mech_pgg_seeded(args):
     data = args["dataset"]
     domain = args["domain"]
 
     pgg = importlib.import_module("model")
     pgg_model = pgg.Private_PGM(args["label_col"], True, 
                             args["epsilon"], args["delta"])
-    pgg_model.train(data, args["domain"], num_iters=100)
+    pgg_model.train(data, args["domain"], num_iters=2000)
     save_object(pgg_model, "model.pkl")
-    synth = pgg_model.generate(num_rows=data.shape[0])
+    synth = pgg_model.generate(target_dist=args["label_dist"])
     # pgg always puts label column at the end
     synth_x, synth_y = synth[:, :-1], synth[:, -1]
     synth = numpy.hstack([numpy.array([synth_y]).T, synth_x])
@@ -445,8 +447,8 @@ mechanisms = {
         "aim_cp": mech_aim_cp,
         "mst": mech_mst, 
         "mwem": mech_mwem, 
-        "new_pro_gene_gen": mech_new_pgg,
         "pro_gene_gen": mech_pgg,
+        "pro_gene_gen_seeded": mech_pgg_seeded,
         "pro_gene_gen_nodp": mech_pgg_nodp,
         "pro_gene_gen_split": mech_pgg_split,
         "pro_gene_gen_retrain": mech_pgg_split_retrain,

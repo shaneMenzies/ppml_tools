@@ -1,0 +1,46 @@
+{
+    "data": {
+        "train": {
+            "x": [
+                "../data/ELSA/sc/onek1k_nl_top1000_x_train.csv"
+            ],
+            "y": [
+                "../data/ELSA/sc/onek1k_y_train.csv"
+            ]
+        },
+
+        "test": {
+            "x": [
+                "../data/ELSA/sc/onek1k_nl_top1000_x_test.csv"
+            ],
+            "y": [
+                "../data/ELSA/sc/onek1k_y_test.csv"
+            ]
+        }
+    },
+
+    "drop_cols": [
+        "Unnamed",
+        "Unnamed: 0",
+        "Unnamed: 1"
+    ],
+
+    "label_column": "cell_type",
+
+    "discretize": { 
+        "quantiles": [
+            0.25, 
+            0.5, 
+            0.75 
+        ],
+        "save_statistics": "elsa_sc_nl_top1000_4bins_stats.joblib", 
+        "save_means": "elsa_sc_nl_top1000_4bins_means.joblib", 
+        "save_quantiles": "elsa_sc_nl_top1000_4bins_quantiles.joblib" 
+    }, 
+
+    "split": {},
+
+    "output": {
+        "domain": "elsa_sc_nl_top1000_4bins_domain.json"
+    }
+}

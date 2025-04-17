@@ -22,12 +22,17 @@ def pipeline(args):
     write_file(pp_result["train"], os.path.join(args.output_dir, "train_data.SENSITIVE.csv"), index=False)
     write_file(pp_result["test"], os.path.join(args.output_dir, "test_data.SENSITIVE.csv"), index=False)
 
+    test_label_dist = test["label"]
+    # clear up test data for generation
+    del test
+
     # Generate
     mechanism_args = {
             "dataset": train,
             "domain": domain,
             "epsilon": args.epsilon,
             "output_dir": args.output_dir,
+            "label_dist": test_label_dist
             }
     if args.delta != None:
         mechanism_args["delta"] = args.delta
@@ -45,21 +50,23 @@ def pipeline(args):
     if args.deprocess:
         deprocess(synth, pp_spec, args.output_dir)
 
-    # Measure
-    measure_args = types.SimpleNamespace(
-            label_column = "label",
-            verbose = False,
-            iterations = args.measure_iterations,
-            output_dir = args.output_dir
-            )
+    if not args.skip_measure:
+        # Measure
+        measure_args = types.SimpleNamespace(
+                label_column = "label",
+                verbose = False,
+                iterations = args.measure_iterations,
+                output_dir = args.output_dir
+                )
 
-    if domain["label"] == 2:
-        measure_args.binary = True
-    else:
-        measure_args.binary = False
-        measure_args.multi_class = domain["label"]
-    
-    scores, confusion_matrices = measure(synth, test, measure_args)
+        if domain["label"] == 2:
+            measure_args.binary = True
+        else:
+            measure_args.binary = False
+            measure_args.multi_class = domain["label"]
+        
+
+        scores, confusion_matrices = measure(synth, test, measure_args)
 
 
 if __name__ == "__main__":
@@ -73,6 +80,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--measure-iterations", default=1, type=int)
     parser.add_argument("-o", "--output-dir", required=True)
     parser.add_argument("--deprocess", action="store_true")
+    parser.add_argument("--skip-measure", action="store_true")
 
     args = parser.parse_args()
 

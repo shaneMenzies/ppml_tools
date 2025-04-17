@@ -25,10 +25,12 @@ def filter_data(data, spec):
         for val in filter:
             if val not in common_values:
                 print("Warning: Value '", val, "' in filter not found in data!")
+        print("Data after filter")
+        print(data[common_values])
         return data[common_values]
     else:
-
         print("Data after filter")
+        print(data)
         return data
 
 def load_data(spec):
@@ -131,7 +133,7 @@ def label_data(data, spec):
         label_column = spec["label_column"]
         mapping = spec["label_mapping"]
         labels = data[label_column].to_list()
-        data = data.drop(columns=spec["label_column"])
+        data = data.drop(columns=label_column)
         for i in range(len(labels)):
             label = labels[i]
             if label in mapping:
@@ -144,6 +146,8 @@ def label_data(data, spec):
                 print("Warning: Unable to determine correct label for ", label)
             labels[i] = label
         data.insert(0, "label", labels)
+    elif "label_column" in spec:
+        data = data.rename(columns={spec["label_column"]: "label"})
     return data
 
 def discretize_data(data, spec):
@@ -199,11 +203,11 @@ def discretize_data(data, spec):
         if "save_quantiles" in spec["discretize"]:
             write_file(quantile_dict, spec["discretize"]["save_quantiles"])
             print("Quantile data written to ", spec["discretize"]["save_quantiles"])
+    data = data.apply(pandas.to_numeric, downcast="integer")
     if had_labels:
         data = pandas.concat([label_col, data], axis=1)
 
-    for col in data.columns:
-        print(f"{col} Value spread: {list(zip(*numpy.unique(data[col].values, return_counts=True)))}")
+
     return data
 
 def preprocess(spec):

@@ -1,0 +1,46 @@
+
+{ 
+    "data": {
+        "train": {
+            "x": [
+                "../data/AML_VG/train.csv"
+            ],
+            "y": [
+                "../data/AML_VG/trainlabel.csv"
+            ]
+        },
+
+        "test": {
+            "x": [
+                "../data/AML_VG/test.csv"
+            ],
+            "y": [
+                "../data/AML_VG/testlabel.csv"
+            ]
+        }
+    }, 
+
+
+    "drop_cols": [
+        "CellType"
+    ],
+
+    "label_column": "label", 
+
+    "discretize": { 
+        "quantiles": [ 
+            0.25, 
+            0.5, 
+            0.75 
+        ], 
+        "save_statistics": "aml_vg_4bins_stats.joblib", 
+        "save_means": "aml_vg_4bins_means.joblib", 
+        "save_quantiles": "aml_vg_4bins_quantiles.joblib" 
+    }, 
+ 
+    "split": {}, 
+ 
+    "output": { 
+        "domain": "AML_VG_4bins_domain.json" 
+    } 
+} 
